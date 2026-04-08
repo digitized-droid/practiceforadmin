@@ -505,7 +505,9 @@ async function signUp(){
 
     const { data: students } = await supabaseClient
       .from("students_masterlist")
-      .select("*");
+	.select("*")
+	.eq("student_number", student)
+	.single()
 
     const studentData = students.find(s =>
       normalizeStudentNumber(s.student_number) === student
