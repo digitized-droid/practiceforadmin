@@ -503,15 +503,17 @@ async function signUp(){
     const phone = document.getElementById("su_phone").value.trim();
     const password = document.getElementById("su_password").value;
 
-    const { data: students } = await supabaseClient
-      .from("students_masterlist")
-	.select("*")
-	.eq("student_number", student)
-	.single()
+    const { data: studentData, error } = await supabaseClient
+  .from("students_masterlist")
+  .select("*")
+  .eq("student_number", student)
+  .maybeSingle();
 
-    const studentData = students.find(s =>
-      normalizeStudentNumber(s.student_number) === student
-    );
+if (error || !studentData) {
+  showToast("Student not found", "error");
+  setButtonState(btn, "normal");
+  return;
+}
 
     if(!studentData){
       showToast("Student not found", "error");
