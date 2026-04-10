@@ -1650,78 +1650,78 @@ window.addEditImage = function(btn) {
 	}
 
 
-	/* ---------- DELETE WITH PASSWORD ---------- */
-	window.del = async id =>{
+window.del = async (id) => {
+  if (!confirm("Delete this research?")) return;
 
-  const password = prompt("Enter password to delete this research:");
-  const valid = await verifyPassword(password);
+  const record = dataCache.find(r => r.id === id);
+  if (!record) return alert("Record not found");
 
-  if (!valid) {
-    alert("Incorrect password! Delete denied.");
+  try {
+    // ---------------- DELETE IMAGES FIRST ----------------
+    const imagesToDelete = [];
+
+    if (record.sections && Array.isArray(record.sections)) {
+      record.sections.forEach(sec => {
+        if (Array.isArray(sec.content)) {
+          sec.content.forEach(item => {
+            if (item.type === "image" && item.value) {
+              const filePath = item.value.split("/research-images/")[1];
+              if (filePath) imagesToDelete.push(filePath);
+            }
+          });
+        }
+      });
+    }
+
+    if (imagesToDelete.length > 0) {
+      const { error: storageError } = await supabaseClient
+        .storage
+        .from("research-images")
+        .remove(imagesToDelete);
+
+      if (storageError) {
+  console.error(storageError);
+  alert("Warning: Some images were not deleted from storage.");
+}
+    }
+
+    // ---------------- DELETE DATABASE RECORD ----------------
+    const { error } = await supabaseClient
+      .from("researches")
+      .delete()
+      .eq("id", id);
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    load(); // refresh list
+  } catch (err) {
+    console.error(err);
+    alert("Delete failed");
+  }
+};
+	/* ---------- EDIT WITH PASSWORD ---------- */
+	window.editResearch = async (id) => {
+  // find the record in cache
+  const record = dataCache.find(r => r.id === id);
+
+  if (!record) {
+    alert("Record not found");
     return;
   }
 
-  if (!confirm("Delete this research?")) return;
-
-  /* -------- GET RECORD FIRST (ANCHOR INSERT) -------- */
-  const record = dataCache.find(r => r.id === id);
-
-  if (record && record.sections) {
-
-    const imagesToDelete = [];
-
-    record.sections.forEach(sec => {
-      if (Array.isArray(sec.content)) {
-        sec.content.forEach(item => {
-
-          if (item.type === "image" && item.value) {
-
-            const filePath = item.value.split("/research-images/")[1]; // extract filename
-            imagesToDelete.push(filePath);
-
-          }
-
-        });
-      }
-    });
-
-    if (imagesToDelete.length > 0) {
-
-  const { data, error } = await supabaseClient
-    .storage
-    .from("research-images")
-    .remove(imagesToDelete);
-
-  console.log("Images to delete:", imagesToDelete);
-  console.log("Delete result:", data);
-  console.log("Delete error:", error);
-
-}
-  }
-
-  /* -------- DELETE DATABASE RECORD -------- */
-  const { error } = await supabaseClient
-    .from("researches")
-    .delete()
-    .eq("id", id);
-
-  if (error) alert(error.message);
-  else location.reload();
-};
-	/* ---------- EDIT WITH PASSWORD ---------- */
-	window.editResearch = async id => {
-	  // no password required for edit
-
-	  // Fill modal fields
-	  document.getElementById("editTitle").value = record.title;
-	  document.getElementById("editAuthors").value = toArray(record.authors).join(", ");
-	  document.getElementById("editCourse").value = record.course || "";
-	  document.getElementById("editYear").value = record.academic_year || "";
-	  document.getElementById("editDate").value = record.research_date || "";
-	  document.getElementById("editAbstract").value = record.abstract || "";
-	  document.getElementById("editKeywords").value = (record.keywords || []).join(", ");
-	  document.getElementById("editAdvisers").value = toArray(record.advisers).join(", ");
-	  document.getElementById("editSDG").value = record.sdg || "";
+  // Fill modal fields
+  document.getElementById("editTitle").value = record.title;
+  document.getElementById("editAuthors").value = toArray(record.authors).join(", ");
+  document.getElementById("editCourse").value = record.course || "";
+  document.getElementById("editYear").value = record.academic_year || "";
+  document.getElementById("editDate").value = record.research_date || "";
+  document.getElementById("editAbstract").value = record.abstract || "";
+  document.getElementById("editKeywords").value = (record.keywords || []).join(", ");
+  document.getElementById("editAdvisers").value = toArray(record.advisers).join(", ");
+  document.getElementById("editSDG").value = record.sdg || "";
 	  const container = document.getElementById("editSectionsContainer");
 container.innerHTML = "";
 
