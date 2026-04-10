@@ -738,21 +738,30 @@ async function updateUser(id, field, value) {
     console.log("Role updated:", value);
   }
 }
+
+
+//Delete function
 async function deleteUser(id) {
-  if (!confirm("Delete this user?")) return;
+  if (!confirm("Delete user?")) return;
 
-  const { error } = await supabaseClient
-    .from("profiles")
-    .delete()
-    .eq("id", id);
+  const res = await fetch("https://vwzhzycagqqhcxbopjtc.functions.supabase.co/delete-user", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ user_id: id })
+  });
 
-  if (error) {
-    alert(error.message);
+  const result = await res.json();
+
+  if (!res.ok) {
+    alert(result.error || "Delete failed");
     return;
   }
 
-  loadUsers();
+  await loadUsers();
 }
+
 
 async function updateStudent(id, field, value) {
   const { error } = await supabaseClient
