@@ -467,7 +467,7 @@ button.active-filter:focus {
 <header>
     <div class="header-container">
     <img src="ursm logo.png" alt="URS Logo" class="myImage">
-    <h4>Admin</h4>
+    
 
     <!-- ✅ ADD THIS -->
     <button id="logoutBtn" style="margin-left:auto;">Logout</button>
@@ -504,9 +504,17 @@ button.active-filter:focus {
 
       <label>Abstract</label>
       <textarea id="editAbstract" rows="6"></textarea>
+	
+	<hr>
+	<h3>Chapters / Sections</h3>
 
+	<div id="editSectionsContainer"></div>
+	<button type="button" onclick="addEditSection()">Add Section</button>
+		
       <label>Keywords (comma separated)</label>
       <input type="text" id="editKeywords">
+	  
+	  
 
       <div class="form-actions">
         <button type="submit" class="save">Save</button>
@@ -555,6 +563,13 @@ button.active-filter:focus {
 
             <label>Abstract</label>
             <textarea id="abstract" rows="4"></textarea>
+			
+			<hr>
+			<h3>Chapters / Sections</h3>
+
+			<div id="sectionsContainer"></div>
+
+			<button type="button" onclick="addSection()">+ Add Section</button>
 
             <label>Keywords (comma separated)</label>
             <input type="text" id="keywords" placeholder="e.g., Key, Words">
@@ -604,649 +619,1087 @@ button.active-filter:focus {
   <footer>
     <p>© 2025 <span class="footer-accent">University of Rizal System Morong Campus Library</span>. All rights reserved.</p>
   </footer>
-<script>
+	<script>
+	const SUPABASE_URL = "https://emakckalouwopodqehgn.supabase.co";
+	const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVtYWtja2Fsb3V3b3BvZHFlaGduIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU1NzA3OTYsImV4cCI6MjA4MTE0Njc5Nn0.eRQMLCrL4xEb58ap8RKTOyJx8pusfbr8Ut037GpYXfk";
+	const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+	// Hide page immediately
+	document.documentElement.style.display = "none";
+
+	async function enforceAdmin() {
+	  try {
+		const { data: { session } } = await supabaseClient.auth.getSession();
+
+		// ❌ Not logged in → instant redirect
+		if (!session) {
+		  window.location.href = "index.html";
+		  return;
+		}
+
+		const { data: profile } = await supabaseClient
+		  .from("profiles")
+		  .select("role")
+		  .eq("user_id", session.user.id)
+		  .single();
+
+		// ❌ Not admin → instant redirect
+		if (!profile || profile.role !== "admin") {
+		  window.location.href = "index.html";
+		  return;
+		}
+
+		// ✅ Authorized → show page
+		document.documentElement.style.display = "block";
+
+	  } catch (err) {
+		// Fail-safe redirect (no alerts)
+		window.location.href = "index.html";
+	  }
+	}
+	  
+	// RUN IMMEDIATELY
+	enforceAdmin();
+
+
+	document.addEventListener("DOMContentLoaded", async () => {
+
+	  // ✅ ADD THIS AT THE TOP (or anywhere inside)
+	  document.getElementById("logoutBtn").addEventListener("click", async () => {
+		await supabaseClient.auth.signOut();
+		window.location.href = "index.html";
+	  });
+
+	const list = document.getElementById("research-list");
+	const search = document.getElementById("search");
+	let dataCache = [];
+	const clearFiltersBtn = document.getElementById("clear-filters");
+	clearFiltersBtn.onclick = () => {
+
+	  filters.text = "";
+	  filters.year = null;
+	  filters.sdg = null;
+	  filters.keyword = null;
+	  filters.date = null;
+
+	  search.value = "";
+
+	  document.querySelectorAll(".active-filter")
+		.forEach(b => b.classList.remove("active-filter"));
+
+	  applyFilters();
+	};
+
+	/* ---------- HELPERS ---------- */
+	const filters = {
+	  text: "",
+	  year: null,
+	  sdg: null,
+	  keyword: null,
+	  date: null
+	};
+	const asText = v => {
+	  if (!v) return "";
+	  if (Array.isArray(v)) return v.join(", ");
+	  return String(v);
+	};
+
+	const toArray = v =>
+	  Array.isArray(v)
+		? v
+		: typeof v === "string"
+		  ? v.split(/[\n,]/).map(x => x.trim()).filter(Boolean)
+		  : [];
+
+	const firstAuthor = a =>
+	  Array.isArray(a) && a.length ? a[0] + (a.length>1 ? " et al." : "") : a || "";
+	  
+	const toKeywordArray = v => {
+	  if (!v) return [];
+	  if (Array.isArray(v)) return v.map(k => k.toString().trim()).filter(Boolean);
+	  if (typeof v === "string") return v.split(",").map(k => k.trim()).filter(Boolean);
+	  return [];
+	};
+	const toSDGArray = v => {
+	  if (!v) return [];
+	  if (Array.isArray(v)) return v.map(s => s.trim()).filter(Boolean);
+
+	  return v
+		.split(",")
+		.map(s => s.trim())
+		.filter(Boolean);
+	};
+
+
+	/* ---------- LOAD ---------- */
+	async function load() {
+	  const { data, error } = await supabaseClient
+		.from("researches")
+		.select("*")
+		.order("created_at",{ascending:false});
+
+	  if (error) {
+		list.textContent = error.message;
+		return;
+	  }
+
+	 dataCache = data || [];
+
+	/* reset filters */
+	filters.text = "";
+	filters.year = null;
+	filters.sdg = null;
+	filters.keyword = null;
+	filters.date = null;
+	search.value = "";
+
+	render(dataCache);
+	renderYears(dataCache);
+	renderSDGs(dataCache);
+	renderKeywords(dataCache);
+
+	}
+	await load();
+
+	/* ---------- RENDER ---------- */
+	function applyFilters() {
+	  const q = filters.text.toLowerCase();
+
+	  const filtered = dataCache.filter(r => {
+
+		const matchText =
+	  !q ||
+	  r.title?.toLowerCase().includes(q) ||
+	  toArray(r.authors).join(" ").toLowerCase().includes(q) ||
+	  toArray(r.advisers).join(" ").toLowerCase().includes(q) ||
+	  toKeywordArray(r.keywords).some(k => k.toLowerCase().includes(q)) ||
+	  asText(asText(r.sdg)
+	)
+	?.toLowerCase().includes(q) ||
+	  r.research_date?.toLowerCase().includes(q);
+
+
+		const matchYear =
+	  !filters.year ||
+	  (r.research_date && r.research_date.includes(filters.year));
+
+	const matchSDG =
+	  !filters.sdg ||
+	  toSDGArray(r.sdg).some(s =>
+		s.toLowerCase() === filters.sdg.toLowerCase()
+	  );
+
+
+		const matchKeyword =
+	  !filters.keyword ||
+	  toKeywordArray(r.keywords).some(k =>
+		k.toLowerCase().includes(filters.keyword.toLowerCase())
+	  );
 
 
 
-const SUPABASE_URL = "https://emakckalouwopodqehgn.supabase.co";
-const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVtYWtja2Fsb3V3b3BvZHFlaGduIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU1NzA3OTYsImV4cCI6MjA4MTE0Njc5Nn0.eRQMLCrL4xEb58ap8RKTOyJx8pusfbr8Ut037GpYXfk";
-const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+		const matchDate =
+		  !filters.date || r.research_date === filters.date;
 
-// Hide page immediately
-document.documentElement.style.display = "none";
+		return matchText && matchYear && matchSDG && matchKeyword && matchDate;
+	  });
 
-async function enforceAdmin() {
-  try {
-    const { data: { session } } = await supabaseClient.auth.getSession();
+	  render(filtered);
+	}
 
-    // ❌ Not logged in → instant redirect
-    if (!session) {
-      window.location.href = "index.html";
-      return;
-    }
+	function renderSections(sections) {
+	  if (!sections || !Array.isArray(sections)) return "";
 
-    const { data: profile } = await supabaseClient
-      .from("profiles")
-      .select("role")
-      .eq("user_id", session.user.id)
-      .single();
+	  return sections.map(sec => `
+		<div class="section">
+		  <h3>${sec.title}</h3>
 
-    // ❌ Not admin → instant redirect
-    if (!profile || profile.role !== "admin") {
-      window.location.href = "index.html";;
-      return;
-    }
+		  ${sec.content.map(item => {
+			if (item.type === "text") {
+			  return `<p>${item.value}</p>`;
+			}
 
-    // ✅ Authorized → show page
-    document.documentElement.style.display = "block";
+			if (item.type === "image") {
+			  return `<img src="${item.value}" style="max-width:100%; margin:10px 0;">`;
+			}
 
-  } catch (err) {
-    // Fail-safe redirect (no alerts)
-    window.location.href = "index.html";;
-  }
-}
-  
-// RUN IMMEDIATELY
-enforceAdmin();
+			return "";
+		  }).join("")}
 
+		</div>
+	  `).join("");
+	}
 
-document.addEventListener("DOMContentLoaded", async () => {
+	function render(rows) {
+	  if (!rows.length) {
+		list.textContent = "No research found.";
+		return;
+	  }
 
-  // ✅ ADD THIS AT THE TOP (or anywhere inside)
-  document.getElementById("logoutBtn").addEventListener("click", async () => {
-    await supabaseClient.auth.signOut();
-    window.location.href = "index.html";
-  });
+	  list.innerHTML = rows.map(r=>`
+		<div class="abstract-page">
+		  <div class="abstract-title">
+			${r.title}
+			<div class="abstract-meta">${firstAuthor(r.authors)} — ${r.academic_year||"—"}</div>
+		  </div>
 
-const list = document.getElementById("research-list");
-const search = document.getElementById("search");
-let dataCache = [];
-const clearFiltersBtn = document.getElementById("clear-filters");
-clearFiltersBtn.onclick = () => {
+		  <div class="abstract-content">
+		   <div class="meta-grid">
+	  <div>Authors</div>
+	  <div>${toArray(r.authors).join("<br>")}</div>
 
-  filters.text = "";
-  filters.year = null;
-  filters.sdg = null;
-  filters.keyword = null;
-  filters.date = null;
+	  <div>Advisers</div>
+	  <div>${toArray(asText(r.advisers)).join("<br>")
+	}</div>
 
-  search.value = "";
+	  <div>Course</div>
+	  <div>${toArray(r.course).join("<br>")}</div>
 
-  document.querySelectorAll(".active-filter")
-    .forEach(b => b.classList.remove("active-filter"));
+	  <div>SDG</div>
+	  <div>${toSDGArray(r.sdg).join(", ")}</div>
 
-  applyFilters();
-};
+	  <div>Date</div>
+	  <div>${r.research_date||""}</div>
 
-/* ---------- HELPERS ---------- */
-const filters = {
-  text: "",
-  year: null,
-  sdg: null,
-  keyword: null,
-  date: null
-};
-const asText = v => {
-  if (!v) return "";
-  if (Array.isArray(v)) return v.join(", ");
-  return String(v);
-};
-
-const toArray = v =>
-  Array.isArray(v)
-    ? v
-    : typeof v === "string"
-      ? v.split(/[\n,]/).map(x => x.trim()).filter(Boolean)
-      : [];
-
-const firstAuthor = a =>
-  Array.isArray(a) && a.length ? a[0] + (a.length>1 ? " et al." : "") : a || "";
-  
-const toKeywordArray = v => {
-  if (!v) return [];
-  if (Array.isArray(v)) return v.map(k => k.toString().trim()).filter(Boolean);
-  if (typeof v === "string") return v.split(",").map(k => k.trim()).filter(Boolean);
-  return [];
-};
-const toSDGArray = v => {
-  if (!v) return [];
-  if (Array.isArray(v)) return v.map(s => s.trim()).filter(Boolean);
-
-  return v
-    .split(",")
-    .map(s => s.trim())
-    .filter(Boolean);
-};
+	  <div>Keywords</div>
+	  <div>${toKeywordArray(r.keywords).join(", ")}</div>
+	</div>
 
 
-/* ---------- LOAD ---------- */
-async function load() {
-  const { data, error } = await supabaseClient
-    .from("researches")
-    .select("*")
-    .order("created_at",{ascending:false});
+			<p><strong>EXECUTIVE SUMMARY</strong><br>${r.abstract||""}</p>
+			${renderSections(r.sections)}
+			<button class="delete-btn" onclick="del(${JSON.stringify(r.id)})">Delete</button>
+			<button class="edit-btn" onclick="editResearch(${JSON.stringify(r.id)})">Edit</button>
+		  </div>
+		</div>
+	  `).join("");
 
-  if (error) {
-    list.textContent = error.message;
-    return;
-  }
+	  document.querySelectorAll(".abstract-title").forEach(t=>{
+		t.onclick=()=>t.nextElementSibling.style.display =
+		  t.nextElementSibling.style.display==="block"?"none":"block";
+	  });
+	}
 
- dataCache = data || [];
-
-/* reset filters */
-filters.text = "";
-filters.year = null;
-filters.sdg = null;
-filters.keyword = null;
-filters.date = null;
-search.value = "";
-
-render(dataCache);
-renderYears(dataCache);
-renderSDGs(dataCache);
-renderKeywords(dataCache);
-
-}
-await load();
-
-/* ---------- RENDER ---------- */
-function applyFilters() {
-  const q = filters.text.toLowerCase();
-
-  const filtered = dataCache.filter(r => {
-
-    const matchText =
-  !q ||
-  r.title?.toLowerCase().includes(q) ||
-  toArray(r.authors).join(" ").toLowerCase().includes(q) ||
-  toArray(r.advisers).join(" ").toLowerCase().includes(q) ||
-  toKeywordArray(r.keywords).some(k => k.toLowerCase().includes(q)) ||
-  asText(asText(r.sdg)
-)
-?.toLowerCase().includes(q) ||
-  r.research_date?.toLowerCase().includes(q);
+	/* ---------- SEARCH ---------- */
+	search.oninput = () => {
+	  filters.text = search.value;
+	  applyFilters();
+	};
 
 
-    const matchYear =
-  !filters.year ||
-  (r.research_date && r.research_date.includes(filters.year));
+	/* ---------- FILTERS ---------- */
+	function renderYears(data){
+	  const years = [
+		...new Set(
+		  data
+			.map(d => {
+			  if (!d.research_date) return null;
 
-const matchSDG =
-  !filters.sdg ||
-  toSDGArray(r.sdg).some(s =>
-    s.toLowerCase() === filters.sdg.toLowerCase()
-  );
+			  // Extract 4-digit year (ex: 2021 from "July 2021")
+			  const match = d.research_date.match(/\b\d{4}\b/);
+			  return match ? match[0] : null;
+			})
+			.filter(Boolean)
+		)
+	  ].sort((a,b) => b - a);
+
+	  const container = document.getElementById("year-buttons");
+	  container.innerHTML = "";
+
+	  years.forEach(year => {
+		const btn = document.createElement("button");
+		btn.textContent = year;
+
+		btn.onclick = () => {
+
+	  if (filters.year === year) {
+		filters.year = null;
+		btn.classList.remove("active-filter");
+	  } else {
+		filters.year = year;
+
+		document.querySelectorAll("#year-buttons button")
+		  .forEach(b => b.classList.remove("active-filter"));
+
+		btn.classList.add("active-filter");
+	  }
+
+	  applyFilters();
+	};
+
+		container.appendChild(btn);
+	  });
+	}
+
+	function renderSDGs(data){
+	  const m = {};
+
+	  data.forEach(d => {
+		toSDGArray(d.sdg).forEach(s => {
+		  m[s] = (m[s] || 0) + 1;
+		});
+	  });
+
+	  const container = document.getElementById("sdg-buttons");
+	  container.innerHTML = "";
+
+	  Object.keys(m)
+		.sort((a,b)=>{
+		  const numA = parseInt(a.match(/\d+/)?.[0] || 0);
+		  const numB = parseInt(b.match(/\d+/)?.[0] || 0);
+		  return numA - numB; // ascending order
+		})
+		.forEach(sdg=>{
+		  const btn = document.createElement("button");
+		  btn.textContent = sdg;
+
+		  btn.onclick = () => {
+
+	  if (filters.sdg === sdg) {
+		filters.sdg = null;
+		btn.classList.remove("active-filter");
+	  } else {
+		filters.sdg = sdg;
+
+		document.querySelectorAll("#sdg-buttons button")
+		  .forEach(b => b.classList.remove("active-filter"));
+
+		btn.classList.add("active-filter");
+	  }
+
+	  applyFilters();
+	};
+
+		  container.appendChild(btn);
+		});
+	}
+
+	 function renderKeywords(data) {
+	  const m = {};
+
+	  data.forEach(d => {
+		toKeywordArray(d.keywords).forEach(k => {
+		  m[k] = (m[k] || 0) + 1;
+		});
+	  });
+
+	  const container = document.getElementById("keyword-buttons");
+	  container.innerHTML = "";
+
+	  Object.entries(m)
+		.sort((a, b) => b[1] - a[1])
+		.slice(0, 10)
+		.forEach(([k]) => {
+		  const btn = document.createElement("button");
+		  btn.textContent = k;
+
+		  btn.onclick = () => {
+
+	  if (filters.keyword === k) {
+		filters.keyword = null;
+		btn.classList.remove("active-filter");
+	  } else {
+		filters.keyword = k;
+
+		document.querySelectorAll("#keyword-buttons button")
+		  .forEach(b => b.classList.remove("active-filter"));
+
+		btn.classList.add("active-filter");
+	  }
+
+	  applyFilters();
+	};
+
+		  container.appendChild(btn);
+		});
+	}
+
+	/* ---------- COLLAPSIBLE FORM ---------- */
+	const toggleBtn = document.getElementById("toggle-upload");
+	const formWrapper = document.getElementById("uploadFormWrapper");
+
+	toggleBtn.onclick = () => {
+	  const visible = formWrapper.style.display === "block";
+	  formWrapper.style.display = visible ? "none" : "block";
+	  toggleBtn.textContent = visible ? "Upload Research ▼" : "Upload Research ▲";
+	};
+
+	/* ---------- DOWNLOAD Collection REPORT ---------- */
+	document.getElementById("downloadReport").onclick = () => {
+
+	  // Use currently filtered data
+	  const q = filters.text.toLowerCase();
+
+	  const filtered = dataCache.filter(r => {
+
+		const matchText =
+		  !q ||
+		  r.title?.toLowerCase().includes(q) ||
+		  toArray(r.authors).join(" ").toLowerCase().includes(q);
+
+		const matchYear =
+		  !filters.year ||
+		  (r.research_date && r.research_date.includes(filters.year));
+
+		const matchSDG =
+		  !filters.sdg ||
+		  asText(r.sdg)?.toLowerCase().includes(filters.sdg?.toLowerCase());
+
+		const matchKeyword =
+		  !filters.keyword ||
+		  toKeywordArray(r.keywords).some(k =>
+			k.toLowerCase().includes(filters.keyword.toLowerCase())
+		  );
+
+		return matchText && matchYear && matchSDG && matchKeyword;
+	  });
+
+	  if (!filtered.length) {
+		alert("No data available to export.");
+		return;
+	  }
+	  const { jsPDF } = window.jspdf;
+	const doc = new jsPDF({ orientation: "landscape" });
+
+	  doc.setFont("helvetica", "bold");
+	  doc.setFontSize(14);
+	  doc.text("URSM Library Research Collection Report", 14, 15);
+
+	  doc.setFontSize(10);
+	  doc.setFont("helvetica", "normal");
+	  doc.text("Generated on: " + new Date().toLocaleDateString(), 14, 22);
+	doc.setFont("helvetica", "bold");
+	doc.text("Total Research Records: " + filtered.length, 14, 28);
+	  const tableData = filtered.map(r => {
+
+		// First author only + et al
+		let authorsArr = toArray(r.authors);
+		let formattedAuthor = authorsArr.length
+		  ? authorsArr[0].split(" ")[0] + (authorsArr.length > 1 ? " et al." : "")
+		  : "";
+
+		// Convert academic year to just year
+		let yearOnly = "";
+		if (r.academic_year) {
+		  const match = r.academic_year.match(/\b\d{4}\b/);
+		  yearOnly = match ? match[0] : r.academic_year;
+		}
+
+		return [
+		  r.title || "",
+		  formattedAuthor,
+		  toArray(r.advisers)[0] || "",
+		  r.course || "",
+		  toSDGArray(r.sdg).join(", "),
+		  r.research_date || "",
+		  yearOnly
+		];
+	  });
+
+	  doc.autoTable({
+		head: [[
+		  "Thesis Title",
+		  "Authors",
+		  "Adviser",
+		  "Course",
+		  "SDG",
+		  "Research Date",
+		  "Year"
+		]],
+		body: tableData,
+		startY: 34,
+		theme: "grid",
+		styles: {
+		  fontSize: 9,
+		  cellPadding: 4,
+		  valign: "middle"
+		},
+		headStyles: {
+		  fillColor: [240, 240, 240],
+		  textColor: 0,
+		  fontStyle: "bold"
+		},
+		alternateRowStyles: {
+		  fillColor: [250, 250, 250]
+		},
+		tableLineColor: [200, 200, 200],
+		tableLineWidth: 0.3
+	  });
+
+	  doc.save("URSM_Research_Collection_Report.pdf");
+	};
+	/* ---------- PASSWORD PROTECTION ---------- */
 
 
-    const matchKeyword =
-  !filters.keyword ||
-  toKeywordArray(r.keywords).some(k =>
-    k.toLowerCase().includes(filters.keyword.toLowerCase())
-  );
 
+	let sectionCount = 0;
 
+	function addSection() {
+	  sectionCount++;
+	  
+	  const container = document.getElementById("sectionsContainer");
 
-    const matchDate =
-      !filters.date || r.research_date === filters.date;
+	const block = document.createElement("div");
+	block.classList.add("section-block");
 
-    return matchText && matchYear && matchSDG && matchKeyword && matchDate;
-  });
+	block.style.border = "1px solid #ccc";
+	block.style.padding = "10px";
+	block.style.marginBottom = "10px";
+	block.style.borderRadius = "6px";
+	block.style.backgroundColor = "#f9f9f9";
 
-  render(filtered);
-}
+	block.innerHTML = `
+	<label>Section Title</label>
+	<input type="text" class="section-title">
 
-function render(rows) {
-  if (!rows.length) {
-    list.textContent = "No research found.";
-    return;
-  }
+	<label>Section Text</label>
+	<textarea class="section-text"></textarea>
 
-  list.innerHTML = rows.map(r=>`
-    <div class="abstract-page">
-      <div class="abstract-title">
-        ${r.title}
-        <div class="abstract-meta">${firstAuthor(r.authors)} — ${r.academic_year||"—"}</div>
-      </div>
+	<button type="button" onclick="this.parentElement.remove()">Remove Section</button>
+	`;
 
-      <div class="abstract-content">
-       <div class="meta-grid">
-  <div>Authors</div>
-  <div>${toArray(r.authors).join("<br>")}</div>
+	container.appendChild(block);
+	}
 
-  <div>Advisers</div>
-  <div>${toArray(asText(r.advisers)).join("<br>")
-}</div>
+	/* ---------- EDIT SECTIONS ---------- */
 
-  <div>Course</div>
-  <div>${toArray(r.course).join("<br>")}</div>
+	function addEditSection(title = "", text = "", images = []) {
+  const container = document.getElementById("editSectionsContainer");
 
-  <div>SDG</div>
-  <div>${toSDGArray(r.sdg).join(", ")}</div>
+  const block = document.createElement("div");
+  block.classList.add("section-block");
+  block.style.border = "1px solid #ccc";
+  block.style.padding = "10px";
+  block.style.marginBottom = "10px";
+  block.style.borderRadius = "6px";
+  block.style.backgroundColor = "#f9f9f9";
 
-  <div>Date</div>
-  <div>${r.research_date||""}</div>
+  block.innerHTML = `
+    <label>Section Title</label>
+    <input type="text" class="section-title" value="${title}">
 
-  <div>Keywords</div>
-  <div>${toKeywordArray(r.keywords).join(", ")}</div>
-</div>
+    <label>Section Text</label>
+    <textarea class="section-text">${text}</textarea>
 
-
-        <p><strong>EXECUTIVE SUMMARY</strong><br>${r.abstract||""}</p>
-
-        <button class="delete-btn" onclick="del(${JSON.stringify(r.id)})">Delete</button>
-		<button class="edit-btn" onclick="editResearch(${JSON.stringify(r.id)})">Edit</button>
-      </div>
+    <label>Section Images</label>
+    <div class="section-images">
+      ${images.map(img => `
+        <div class="image-wrapper" style="position:relative; margin-bottom:8px;">
+          <img src="${img}" style="max-width:100%; display:block;"/>
+          <button type="button" style="position:absolute; top:0; right:0;" onclick="this.parentElement.remove()">Remove</button>
+        </div>
+      `).join("")}
     </div>
-  `).join("");
 
-  document.querySelectorAll(".abstract-title").forEach(t=>{
-    t.onclick=()=>t.nextElementSibling.style.display =
-      t.nextElementSibling.style.display==="block"?"none":"block";
-  });
-}
+    <input type="file" multiple class="section-image-upload">
 
-/* ---------- SEARCH ---------- */
-search.oninput = () => {
-  filters.text = search.value;
-  applyFilters();
-};
+    <button type="button" onclick="this.parentElement.remove()">Remove Section</button>
+  `;
 
+  // Handle newly uploaded images
+  const fileInput = block.querySelector(".section-image-upload");
+  const imagesContainer = block.querySelector(".section-images");
 
-/* ---------- FILTERS ---------- */
-function renderYears(data){
-  const years = [
-    ...new Set(
-      data
-        .map(d => {
-          if (!d.research_date) return null;
+  fileInput.addEventListener("change", async e => {
+    const files = Array.from(e.target.files);
 
-          // Extract 4-digit year (ex: 2021 from "July 2021")
-          const match = d.research_date.match(/\b\d{4}\b/);
-          return match ? match[0] : null;
-        })
-        .filter(Boolean)
-    )
-  ].sort((a,b) => b - a);
+    for (const file of files) {
+      // Upload to Supabase Storage or generate local URL for preview
+      const url = URL.createObjectURL(file); // Temporary preview
+      const wrapper = document.createElement("div");
+      wrapper.classList.add("image-wrapper");
+      wrapper.style.position = "relative";
+      wrapper.style.marginBottom = "8px";
 
-  const container = document.getElementById("year-buttons");
-  container.innerHTML = "";
-
-  years.forEach(year => {
-    const btn = document.createElement("button");
-    btn.textContent = year;
-
-    btn.onclick = () => {
-
-  if (filters.year === year) {
-    filters.year = null;
-    btn.classList.remove("active-filter");
-  } else {
-    filters.year = year;
-
-    document.querySelectorAll("#year-buttons button")
-      .forEach(b => b.classList.remove("active-filter"));
-
-    btn.classList.add("active-filter");
-  }
-
-  applyFilters();
-};
-
-    container.appendChild(btn);
-  });
-}
-
-function renderSDGs(data){
-  const m = {};
-
-  data.forEach(d => {
-    toSDGArray(d.sdg).forEach(s => {
-      m[s] = (m[s] || 0) + 1;
-    });
-  });
-
-  const container = document.getElementById("sdg-buttons");
-  container.innerHTML = "";
-
-  Object.keys(m)
-    .sort((a,b)=>{
-      const numA = parseInt(a.match(/\d+/)?.[0] || 0);
-      const numB = parseInt(b.match(/\d+/)?.[0] || 0);
-      return numA - numB; // ascending order
-    })
-    .forEach(sdg=>{
-      const btn = document.createElement("button");
-      btn.textContent = sdg;
-
-      btn.onclick = () => {
-
-  if (filters.sdg === sdg) {
-    filters.sdg = null;
-    btn.classList.remove("active-filter");
-  } else {
-    filters.sdg = sdg;
-
-    document.querySelectorAll("#sdg-buttons button")
-      .forEach(b => b.classList.remove("active-filter"));
-
-    btn.classList.add("active-filter");
-  }
-
-  applyFilters();
-};
-
-      container.appendChild(btn);
-    });
-}
-
- function renderKeywords(data) {
-  const m = {};
-
-  data.forEach(d => {
-    toKeywordArray(d.keywords).forEach(k => {
-      m[k] = (m[k] || 0) + 1;
-    });
-  });
-
-  const container = document.getElementById("keyword-buttons");
-  container.innerHTML = "";
-
-  Object.entries(m)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 10)
-    .forEach(([k]) => {
-      const btn = document.createElement("button");
-      btn.textContent = k;
-
-      btn.onclick = () => {
-
-  if (filters.keyword === k) {
-    filters.keyword = null;
-    btn.classList.remove("active-filter");
-  } else {
-    filters.keyword = k;
-
-    document.querySelectorAll("#keyword-buttons button")
-      .forEach(b => b.classList.remove("active-filter"));
-
-    btn.classList.add("active-filter");
-  }
-
-  applyFilters();
-};
-
-      container.appendChild(btn);
-    });
-}
-
-/* ---------- COLLAPSIBLE FORM ---------- */
-const toggleBtn = document.getElementById("toggle-upload");
-const formWrapper = document.getElementById("uploadFormWrapper");
-
-toggleBtn.onclick = () => {
-  const visible = formWrapper.style.display === "block";
-  formWrapper.style.display = visible ? "none" : "block";
-  toggleBtn.textContent = visible ? "Upload Research ▼" : "Upload Research ▲";
-};
-
-/* ---------- DOWNLOAD Collection REPORT ---------- */
-document.getElementById("downloadReport").onclick = () => {
-
-  // Use currently filtered data
-  const q = filters.text.toLowerCase();
-
-  const filtered = dataCache.filter(r => {
-
-    const matchText =
-      !q ||
-      r.title?.toLowerCase().includes(q) ||
-      toArray(r.authors).join(" ").toLowerCase().includes(q);
-
-    const matchYear =
-      !filters.year ||
-      (r.research_date && r.research_date.includes(filters.year));
-
-    const matchSDG =
-      !filters.sdg ||
-      asText(r.sdg)?.toLowerCase().includes(filters.sdg?.toLowerCase());
-
-    const matchKeyword =
-      !filters.keyword ||
-      toKeywordArray(r.keywords).some(k =>
-        k.toLowerCase().includes(filters.keyword.toLowerCase())
-      );
-
-    return matchText && matchYear && matchSDG && matchKeyword;
-  });
-
-  if (!filtered.length) {
-    alert("No data available to export.");
-    return;
-  }
-  const { jsPDF } = window.jspdf;
-const doc = new jsPDF({ orientation: "landscape" });
-
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(14);
-  doc.text("URSM Library Research Collection Report", 14, 15);
-
-  doc.setFontSize(10);
-  doc.setFont("helvetica", "normal");
-  doc.text("Generated on: " + new Date().toLocaleDateString(), 14, 22);
-doc.setFont("helvetica", "bold");
-doc.text("Total Research Records: " + filtered.length, 14, 28);
-  const tableData = filtered.map(r => {
-
-    // First author only + et al
-    let authorsArr = toArray(r.authors);
-    let formattedAuthor = authorsArr.length
-      ? authorsArr[0].split(" ")[0] + (authorsArr.length > 1 ? " et al." : "")
-      : "";
-
-    // Convert academic year to just year
-    let yearOnly = "";
-    if (r.academic_year) {
-      const match = r.academic_year.match(/\b\d{4}\b/);
-      yearOnly = match ? match[0] : r.academic_year;
+      wrapper.innerHTML = `
+        <img src="${url}" style="max-width:100%; display:block;"/>
+        <button type="button" style="position:absolute; top:0; right:0;" onclick="this.parentElement.remove()">Remove</button>
+      `;
+      imagesContainer.appendChild(wrapper);
     }
 
-    return [
-      r.title || "",
-      formattedAuthor,
-      toArray(r.advisers)[0] || "",
-      r.course || "",
-      toSDGArray(r.sdg).join(", "),
-      r.research_date || "",
-      yearOnly
-    ];
+    fileInput.value = ""; // Reset input
   });
 
-  doc.autoTable({
-    head: [[
-      "Thesis Title",
-      "Authors",
-      "Adviser",
-      "Course",
-      "SDG",
-      "Research Date",
-      "Year"
-    ]],
-    body: tableData,
-    startY: 34,
-    theme: "grid",
-    styles: {
-      fontSize: 9,
-      cellPadding: 4,
-      valign: "middle"
-    },
-    headStyles: {
-      fillColor: [240, 240, 240],
-      textColor: 0,
-      fontStyle: "bold"
-    },
-    alternateRowStyles: {
-      fillColor: [250, 250, 250]
-    },
-    tableLineColor: [200, 200, 200],
-    tableLineWidth: 0.3
-  });
-
-  doc.save("URSM_Research_Collection_Report.pdf");
-};
-/* ---------- PASSWORD PROTECTION ---------- */
-
-const uploadForm = document.getElementById("uploadForm");
-
-uploadForm.onsubmit = async e =>{
-  e.preventDefault();
-
-  const password = document.getElementById("upload_password").value.trim();
-
-const valid = await verifyPassword(password);
-if (!valid) {
-  alert("Incorrect password! Upload denied.");
-  return;
+  container.appendChild(block);
 }
 
-  const title = document.getElementById("title").value.trim();
- const sdg = toSDGArray(document.getElementById("sdg").value);
-  const authors = document.getElementById("authors").value
-    .split(",").map(a=>a.trim()).filter(Boolean).join("\n");
-  const advisers = document.getElementById("advisers").value
-  .split(",").map(a=>a.trim()).filter(Boolean).join("\n");
-  const course = document.getElementById("course").value.trim();
-  const major = document.getElementById("major").value.trim();
-  const academic_year = document.getElementById("academic_year").value.trim();
-  const research_date = document.getElementById("research_date").value.trim();
-  const abstract = document.getElementById("abstract").value.trim();
-  const keywords = document.getElementById("keywords").value
-    .split(",").map(k=>k.trim()).filter(Boolean);
+	/* ---------- COLLECT SECTIONS ---------- */
 
-  const combinedCourse = course + (major ? "\nMajor in " + major : "");
+	function collectSections(containerId) {
+  const container = document.getElementById(containerId);
+  const sections = [];
 
-  const { data, error } = await supabaseClient.from("researches").insert([{
-    title,
-	sdg,
-    authors,
-	advisers,
-    course: combinedCourse,
-    academic_year,
-    research_date,
-    abstract,
-    keywords
-  }]);
+  container.querySelectorAll(".section-block").forEach(block => {
+    const title = block.querySelector(".section-title").value;
+    const text = block.querySelector(".section-text").value;
 
-  if (error) alert(error.message);
-  else {
-    alert("Research uploaded successfully!");
-    uploadForm.reset();
-    load();
-  }
-};
-async function verifyPassword(inputPassword) {
-  const { data, error } = await supabaseClient
-    .from("admin_password")
-    .select("password_hash")
-    .limit(1)
-    .single();
+    const content = [];
+    if (text) content.push({ type: "text", value: text });
 
-  if (error || !data) {
-    alert("Error checking password.");
-    return false;
-  }
+    block.querySelectorAll(".section-images img").forEach(img => {
+      content.push({ type: "image", value: img.src });
+    });
 
-  // Use Supabase/Postgres crypt comparison
-  const { data: match } = await supabaseClient.rpc("check_admin_password", {
-    input_password: inputPassword
+    if (!title && !content.length) return;
+
+    sections.push({ title, content });
   });
 
-  return match === true;
+  return sections;
 }
-/* ---------- DELETE WITH PASSWORD ---------- */
-window.del = async id =>{
+
+
+
+	const uploadForm = document.getElementById("uploadForm");
+
+	uploadForm.onsubmit = async e =>{
+	  e.preventDefault();
+
+	  const password = document.getElementById("upload_password").value.trim();
+
+	const valid = await verifyPassword(password);
+	if (!valid) {
+	  alert("Incorrect password! Upload denied.");
+	  return;
+	}
+
+	  const title = document.getElementById("title").value.trim();
+	 const sdg = toSDGArray(document.getElementById("sdg").value);
+	  const authors = document.getElementById("authors").value
+		.split(",").map(a=>a.trim()).filter(Boolean).join("\n");
+	  const advisers = document.getElementById("advisers").value
+	  .split(",").map(a=>a.trim()).filter(Boolean).join("\n");
+	  const course = document.getElementById("course").value.trim();
+	  const major = document.getElementById("major").value.trim();
+	  const academic_year = document.getElementById("academic_year").value.trim();
+	  const research_date = document.getElementById("research_date").value.trim();
+	  const abstract = document.getElementById("abstract").value.trim();
+	  const keywords = document.getElementById("keywords").value
+		.split(",").map(k=>k.trim()).filter(Boolean);
+
+	  const combinedCourse = course + (major ? "\nMajor in " + major : "");
+		const sectionBlocks = document.querySelectorAll(".section-block");
+
+	let sections = [];
+
+	for (const block of sectionBlocks) {
+	  const title = block.querySelector(".section-title").value;
+
+	  const content = [];
+
+	  const elements = block.querySelector(".section-content").children;
+
+	  for (const el of elements) {
+
+		if (el.classList.contains("section-text")) {
+		  content.push({
+			type: "text",
+			value: el.value
+		  });
+		}
+
+		if (el.classList.contains("section-image")) {
+	  if (el.files.length > 0) {
+		const file = el.files[0];
+
+		// 🔥 ONLY allow images
+		if (!file.type.startsWith("image/")) {
+		  alert("Only image files are allowed!");
+		  continue;
+		}
+
+		const url = await uploadImage(file);
+
+		// 🔥 ONLY push if upload succeeded
+		if (url) {
+		  content.push({
+			type: "image",
+			value: url
+		  });
+		} else {
+		  alert("Image upload failed!");
+		}
+	  }
+	}
+	  }
+
+	  sections.push({ title, content });
+	}
+	  const { data, error } = await supabaseClient.from("researches").insert([{
+		title,
+		sdg,
+		authors,
+		advisers,
+		course: combinedCourse,
+		academic_year,
+		research_date,
+		abstract,
+		keywords,
+		sections
+	  }]);
+
+	  if (error) alert(error.message);
+	  else {
+		alert("Research uploaded successfully!");
+		uploadForm.reset();
+		load();
+	  }
+	};
+	async function verifyPassword(inputPassword) {
+	  const { data, error } = await supabaseClient
+		.from("admin_password")
+		.select("password_hash")
+		.limit(1)
+		.single();
+
+	  if (error || !data) {
+		alert("Error checking password.");
+		return false;
+	  }
+
+	  // Use Supabase/Postgres crypt comparison
+	  const { data: match } = await supabaseClient.rpc("check_admin_password", {
+		input_password: inputPassword
+	  });
+
+	  return match === true;
+	}
+
+
+	window.addSection = function() {
+	  const container = document.getElementById("sectionsContainer");
+
+	  const sectionDiv = document.createElement("div");
+	  sectionDiv.className = "section-block";
+
+	  sectionDiv.innerHTML = `
+		<hr>
+		<label>Section Title</label>
+		<input type="text" class="section-title" placeholder="Chapter 1">
+
+		<div class="section-content"></div>
+
+		<button type="button" onclick="addText(this)">+ Text</button>
+		<button type="button" onclick="addImage(this)">+ Image</button>
+	  `;
+
+	  container.appendChild(sectionDiv);
+	}
+	window.addEditSection = function() {
+
+  const container = document.getElementById("editSectionsContainer");
+
+  const block = document.createElement("div");
+  block.className = "section-block";
+
+  block.innerHTML = `
+    <hr>
+    <label>Section Title</label>
+    <input type="text" class="section-title">
+
+    <div class="section-content"></div>
+
+    <button type="button" onclick="addEditText(this)">+ Text</button>
+    <button type="button" onclick="addEditImage(this)">+ Image</button>
+    <button type="button" onclick="this.parentElement.remove()">Remove Section</button>
+  `;
+
+  container.appendChild(block);
+}
+
+window.addEditText = function(btn) {
+
+  const contentDiv = btn.parentElement.querySelector(".section-content");
+
+  const textarea = document.createElement("textarea");
+  textarea.className = "section-text";
+  textarea.placeholder = "Enter text...";
+  contentDiv.appendChild(textarea);
+}
+
+window.addEditImage = function(btn) {
+
+  const contentDiv = btn.parentElement.querySelector(".section-content");
+
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = "image/*";
+  input.className = "section-image";
+
+  contentDiv.appendChild(input);
+}
+
+
+	window.addText = function(btn) {
+	  const contentDiv = btn.parentElement.querySelector(".section-content");
+
+	  const textarea = document.createElement("textarea");
+	  textarea.className = "section-text";
+	  textarea.placeholder = "Enter text...";
+	  contentDiv.appendChild(textarea);
+	}
+
+	window.addImage = function(btn) {
+	  const contentDiv = btn.parentElement.querySelector(".section-content");
+
+	  const input = document.createElement("input");
+	  input.type = "file";
+	input.accept = "image/*"; // 🔥 prevents CSV selection
+	  input.className = "section-image";
+	  contentDiv.appendChild(input);
+	}
+
+
+	async function uploadImage(file) {
+	  const fileName = Date.now() + "_" + file.name.replace(/\s+/g, "_");
+
+	  const { error } = await supabaseClient
+		.storage
+		.from("research-images")
+		.upload(fileName, file);
+
+	  if (error) {
+		console.error("Upload error:", error);
+		return null;
+	  }
+
+	  const { data } = supabaseClient
+		.storage
+		.from("research-images")
+		.getPublicUrl(fileName);
+
+	  return data.publicUrl;
+	}
+
+
+	/* ---------- DELETE WITH PASSWORD ---------- */
+	window.del = async id =>{
+
   const password = prompt("Enter password to delete this research:");
   const valid = await verifyPassword(password);
-if (!valid) {
+
+  if (!valid) {
     alert("Incorrect password! Delete denied.");
     return;
   }
 
   if (!confirm("Delete this research?")) return;
 
-  const { error } = await supabaseClient.from("researches").delete().eq("id",id);
+  /* -------- GET RECORD FIRST (ANCHOR INSERT) -------- */
+  const record = dataCache.find(r => r.id === id);
+
+  if (record && record.sections) {
+
+    const imagesToDelete = [];
+
+    record.sections.forEach(sec => {
+      if (Array.isArray(sec.content)) {
+        sec.content.forEach(item => {
+
+          if (item.type === "image" && item.value) {
+
+            const filePath = item.value.split("/research-images/")[1]; // extract filename
+            imagesToDelete.push(filePath);
+
+          }
+
+        });
+      }
+    });
+
+    if (imagesToDelete.length > 0) {
+
+  const { data, error } = await supabaseClient
+    .storage
+    .from("research-images")
+    .remove(imagesToDelete);
+
+  console.log("Images to delete:", imagesToDelete);
+  console.log("Delete result:", data);
+  console.log("Delete error:", error);
+
+}
+  }
+
+  /* -------- DELETE DATABASE RECORD -------- */
+  const { error } = await supabaseClient
+    .from("researches")
+    .delete()
+    .eq("id", id);
+
   if (error) alert(error.message);
   else location.reload();
 };
-/* ---------- EDIT WITH PASSWORD ---------- */
-window.editResearch = async id => {
-  const password = prompt("Enter password to edit this research:");
-  const valid = await verifyPassword(password);
-if (!valid) {
-    alert("Incorrect password! Edit denied.");
-    return;
-  }
+	/* ---------- EDIT WITH PASSWORD ---------- */
+	window.editResearch = async id => {
+	  const password = prompt("Enter password to edit this research:");
+	  const valid = await verifyPassword(password);
+	if (!valid) {
+		alert("Incorrect password! Edit denied.");
+		return;
+	  }
 
-  const record = dataCache.find(r => r.id === id);
-  if (!record) {
-    alert("Record not found.");
-    return;
-  }
+	  const record = dataCache.find(r => r.id === id);
+	  if (!record) {
+		alert("Record not found.");
+		return;
+	  }
 
-  // Fill modal fields
-  document.getElementById("editTitle").value = record.title;
-  document.getElementById("editAuthors").value = toArray(record.authors).join(", ");
-  document.getElementById("editCourse").value = record.course || "";
-  document.getElementById("editYear").value = record.academic_year || "";
-  document.getElementById("editDate").value = record.research_date || "";
-  document.getElementById("editAbstract").value = record.abstract || "";
-  document.getElementById("editKeywords").value = (record.keywords || []).join(", ");
-  document.getElementById("editAdvisers").value = toArray(record.advisers).join(", ");
-  document.getElementById("editSDG").value = record.sdg || "";
+	  // Fill modal fields
+	  document.getElementById("editTitle").value = record.title;
+	  document.getElementById("editAuthors").value = toArray(record.authors).join(", ");
+	  document.getElementById("editCourse").value = record.course || "";
+	  document.getElementById("editYear").value = record.academic_year || "";
+	  document.getElementById("editDate").value = record.research_date || "";
+	  document.getElementById("editAbstract").value = record.abstract || "";
+	  document.getElementById("editKeywords").value = (record.keywords || []).join(", ");
+	  document.getElementById("editAdvisers").value = toArray(record.advisers).join(", ");
+	  document.getElementById("editSDG").value = record.sdg || "";
+	  const container = document.getElementById("editSectionsContainer");
+container.innerHTML = "";
 
-  // Show modal
-  const modal = document.getElementById("editModal");
-  modal.style.display = "flex";
+if (record.sections && Array.isArray(record.sections)) {
+  record.sections.forEach(sec => {
 
-  // Close modal handler
-  const closeModal = () => { modal.style.display = "none"; };
-  document.getElementById("cancelEdit").onclick = closeModal;
-  modal.onclick = e => { if(e.target === modal) closeModal(); } // click outside closes
+    const block = document.createElement("div");
+    block.className = "section-block";
 
-  // Submit changes
-  const form = document.getElementById("editForm");
-  form.onsubmit = async e => {
-    e.preventDefault();
+    block.innerHTML = `
+      <label>Section Title</label>
+      <input type="text" class="section-title" value="${sec.title || ""}">
 
-    const updated = {
-      title: document.getElementById("editTitle").value.trim(),
-      authors: document.getElementById("editAuthors").value.split(",").map(a => a.trim()).filter(Boolean).join("\n"),
-      course: document.getElementById("editCourse").value.trim(),
-      academic_year: document.getElementById("editYear").value.trim(),
-      research_date: document.getElementById("editDate").value.trim(),
-      abstract: document.getElementById("editAbstract").value.trim(),
-      keywords: document.getElementById("editKeywords").value.split(",").map(k => k.trim()).filter(Boolean),
-	  advisers: document.getElementById("editAdvisers").value
-	  .split(",").map(a => a.trim()).filter(Boolean).join("\n"),
-	  sdg: toSDGArray(
-  document.getElementById("editSDG").value
-),
-}; 
-    const { error } = await supabaseClient
-      .from("researches")
-      .update(updated)
-      .eq("id", id);
+      <div class="section-content"></div>
 
-    if (error) alert(error.message);
-    else {
-      alert("Research updated successfully!");
-      closeModal();
-      load();
+      <button type="button" onclick="addEditText(this)">+ Text</button>
+      <button type="button" onclick="addEditImage(this)">+ Image</button>
+      <button type="button" onclick="this.parentElement.remove()">Remove Section</button>
+    `;
+
+    const contentDiv = block.querySelector(".section-content");
+
+    if (Array.isArray(sec.content)) {
+      sec.content.forEach(item => {
+
+        if (item.type === "text") {
+          const textarea = document.createElement("textarea");
+          textarea.className = "section-text";
+          textarea.value = item.value || "";
+          contentDiv.appendChild(textarea);
+        }
+
+        if (item.type === "image") {
+          const img = document.createElement("img");
+          img.src = item.value;
+          img.style.maxWidth = "200px";
+          img.style.display = "block";
+          img.style.marginBottom = "5px";
+
+          const input = document.createElement("input");
+          input.type = "file";
+          input.accept = "image/*";
+          input.className = "section-image";
+
+          contentDiv.appendChild(img);
+          contentDiv.appendChild(input);
+        }
+
+      });
     }
-  };
-};
-});
-</script>
+
+    container.appendChild(block);
+  });
+}
+
+
+	  // Show modal
+	  const modal = document.getElementById("editModal");
+	  modal.style.display = "flex";
+
+	  // Close modal handler
+	  const closeModal = () => { modal.style.display = "none"; };
+	  document.getElementById("cancelEdit").onclick = closeModal;
+	  modal.onclick = e => { if(e.target === modal) closeModal(); } // click outside closes
+
+	  // Submit changes
+	  const form = document.getElementById("editForm");
+	  form.onsubmit = async e => {
+		e.preventDefault();
+		
+		
+		const sectionBlocks = document.querySelectorAll("#editSectionsContainer .section-block");
+let sections = [];
+
+for (const block of sectionBlocks) {
+
+  const title = block.querySelector(".section-title").value;
+
+  const content = [];
+  const elements = block.querySelector(".section-content").children;
+
+  for (const el of elements) {
+
+    if (el.classList.contains("section-text")) {
+      content.push({
+        type: "text",
+        value: el.value
+      });
+    }
+
+    if (el.classList.contains("section-image")) {
+      if (el.files.length > 0) {
+
+        const file = el.files[0];
+
+        if (!file.type.startsWith("image/")) {
+          alert("Only image files allowed.");
+          continue;
+        }
+
+        const url = await uploadImage(file);
+
+        if (url) {
+          content.push({
+            type: "image",
+            value: url
+          });
+        }
+      }
+    }
+
+  }
+
+  sections.push({ title, content });
+}
+		
+		
+		const updated = {
+		  title: document.getElementById("editTitle").value.trim(),
+		  authors: document.getElementById("editAuthors").value.split(",").map(a => a.trim()).filter(Boolean).join("\n"),
+		  course: document.getElementById("editCourse").value.trim(),
+		  academic_year: document.getElementById("editYear").value.trim(),
+		  research_date: document.getElementById("editDate").value.trim(),
+		  abstract: document.getElementById("editAbstract").value.trim(),
+		  keywords: document.getElementById("editKeywords").value.split(",").map(k => k.trim()).filter(Boolean),
+		  advisers: document.getElementById("editAdvisers").value.split(",").map(a => a.trim()).filter(Boolean).join("\n"),
+		  sdg: toSDGArray(document.getElementById("editSDG").value),
+		  sections: sections
+	}; 
+		const { error } = await supabaseClient
+		  .from("researches")
+		  .update(updated)
+		  .eq("id", id);
+
+		if (error) alert(error.message);
+		else {
+		  alert("Research updated successfully!");
+		  closeModal();
+		  load();
+		}
+	  };
+	};
+	});
+	</script>
 
 </body>
 </html>
-	
