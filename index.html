@@ -445,6 +445,8 @@ function normalizeStudentNumber(num){
   return num.toUpperCase().replace(/\s+/g,"").replace(/-/g,"");
 }
 
+
+
 // ---------------- TOGGLE ----------------
 function updateMode() {
   authTitle.innerText = isSignup ? "Sign Up" : "Login";
@@ -498,73 +500,90 @@ async function signUp(){
 
   try {
     const student = normalizeStudentNumber(document.getElementById("su_student").value);
-    const name = normalizeName(document.getElementById("su_name").value);
+    const nameInput = document.getElementById("su_name").value.trim();
     const email = document.getElementById("su_email").value.trim();
     const phone = document.getElementById("su_phone").value.trim();
     const password = document.getElementById("su_password").value;
 
-    const { data: studentData, error } = await supabaseClient
-  .from("students_masterlist")
-  .select("*")
-  .eq("student_number", student)
-  .maybeSingle();
+    // --- Verify via RPC ---
+const { data: isVerified, error } = await supabaseClient.rpc("verify_student", {
+  student_num: student,
+  input_name: nameInput
+});
 
-if (error || !studentData) {
-  showToast("Student not found", "error");
+if(error || !isVerified){
+  showToast("Student not found or name mismatch", "error");
   setButtonState(btn, "normal");
   return;
 }
 
-    if(!studentData){
-      showToast("Student not found", "error");
-      setButtonState(btn, "normal");
-      return;
-    }
+    // --- Fetch full student record ---
+    const { data: studentData, error: studentError } =
+  await supabaseClient.rpc("get_student_record", {
+    student_num: student
+  });
 
-    if(!normalizeName(studentData.full_name).includes(name)){
-      showToast("Name mismatch", "error");
-      setButtonState(btn, "normal");
-      return;
-    }
+const record = studentData?.[0];
 
-    if(studentData.is_registered){
+if(studentError || !record){
+  showToast("Student record not found", "error");
+  setButtonState(btn, "normal");
+  return;
+}
+
+    if(record.is_registered){
       showToast("Already registered", "error");
       setButtonState(btn, "normal");
       return;
     }
 
-    const { data: authData, error: authError } =
-      await supabaseClient.auth.signUp({ email, password });
+    // --- Sign up ---
+    const { data: authData, error: authError } = await supabaseClient.auth.signUp({ email, password });
 
-    if(authError){
-      showToast(authError.message, "error");
-      setButtonState(btn, "normal");
-      return;
-    }
-
-    await supabaseClient.from("profiles").insert({
-      id: authData.user.id,
-      student_number: studentData.student_number,
-      full_name: studentData.full_name,
-      email,
-      phone,
-      role: "user"
-    });
-
-    await supabaseClient
-      .from("students_masterlist")
-      .update({ is_registered: true })
-      .eq("student_number", studentData.student_number);
-
-    showToast("Account created! Check email.", "success");
-
-  } catch (err) {
-    console.error(err);
-    showToast("Unexpected error", "error");
-  }
-
+if(authError){
+  showToast(authError.message, "error");
   setButtonState(btn, "normal");
+  return;
 }
+
+const user = authData.user;
+
+if (!user) {
+  showToast("Signup failed: no user returned", "error");
+  setButtonState(btn, "normal");
+  return;
+}
+
+console.log("USER ID:", user.id);
+// --- Register student via RPC ---
+const { error: registerError } = await supabaseClient.rpc("register_student", {
+  p_student_number: record.student_number,
+  p_full_name: record.full_name,
+  p_email: email,
+  p_phone: phone,
+  p_user_id: user.id
+});
+
+if (registerError) {
+  console.error("REGISTER ERROR:", registerError);
+  showToast(registerError.message, "error");
+  setButtonState(btn, "normal");
+  return;
+}
+
+showToast("Account created! Check email.", "success");
+setButtonState(btn, "normal");
+return;
+
+} catch (err) {
+  console.error(err);
+  showToast("Unexpected error", "error");
+}
+
+setButtonState(btn, "normal");
+}
+
+
 
 // ---------------- LOGIN ----------------
 async function login(){
