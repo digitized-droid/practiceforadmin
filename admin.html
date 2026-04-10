@@ -779,10 +779,7 @@ button.active-filter:focus {
 
             <label>Keywords (comma separated)</label>
             <input type="text" id="keywords" placeholder="e.g., Key, Words">
-
-            <label>Upload Password</label>
-            <input type="password" id="upload_password" placeholder="Enter password" required>
-
+			
             <button type="submit">Upload</button>
           </form>
         </div>
@@ -1461,14 +1458,8 @@ button.active-filter:focus {
 
 	uploadForm.onsubmit = async e =>{
 	  e.preventDefault();
-
-	  const password = document.getElementById("upload_password").value.trim();
-
-	const valid = await verifyPassword(password);
-	if (!valid) {
-	  alert("Incorrect password! Upload denied.");
-	  return;
-	}
+	  
+	  // no password check
 
 	  const title = document.getElementById("title").value.trim();
 	 const sdg = toSDGArray(document.getElementById("sdg").value);
@@ -1552,27 +1543,7 @@ button.active-filter:focus {
 		load();
 	  }
 	};
-	async function verifyPassword(inputPassword) {
-	  const { data, error } = await supabaseClient
-		.from("admin_password")
-		.select("password_hash")
-		.limit(1)
-		.single();
-
-	  if (error || !data) {
-		alert("Error checking password.");
-		return false;
-	  }
-
-	  // Use Supabase/Postgres crypt comparison
-	  const { data: match } = await supabaseClient.rpc("check_admin_password", {
-		input_password: inputPassword
-	  });
-
-	  return match === true;
-	}
-
-
+	
 	window.addSection = function() {
 	  const container = document.getElementById("sectionsContainer");
 
@@ -1739,18 +1710,7 @@ window.addEditImage = function(btn) {
 };
 	/* ---------- EDIT WITH PASSWORD ---------- */
 	window.editResearch = async id => {
-	  const password = prompt("Enter password to edit this research:");
-	  const valid = await verifyPassword(password);
-	if (!valid) {
-		alert("Incorrect password! Edit denied.");
-		return;
-	  }
-
-	  const record = dataCache.find(r => r.id === id);
-	  if (!record) {
-		alert("Record not found.");
-		return;
-	  }
+	  // no password required for edit
 
 	  // Fill modal fields
 	  document.getElementById("editTitle").value = record.title;
