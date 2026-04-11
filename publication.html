@@ -6,8 +6,6 @@
 <title>URSM Library</title>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-
 <style>
         :root {
             --primary-blue: #003366;
@@ -774,6 +772,46 @@ button.filter-btn{
 </div>
 
 </main>
+<!-- FILE PREVIEW MODAL -->
+<div id="file-modal" style="
+  display:none;
+  position:fixed;
+  top:0; left:0;
+  width:100%; height:100%;
+  background:rgba(0,0,0,0.7);
+  z-index:9999;
+  align-items:center;
+  justify-content:center;
+">
+
+  <div style="
+    width:90%;
+    height:90%;
+    background:#fff;
+    border-radius:10px;
+    overflow:hidden;
+    position:relative;
+  ">
+
+    <button onclick="closeFilePreview()" style="
+      position:absolute;
+      top:10px;
+      right:10px;
+      z-index:10;
+      background:#1e3a8a;
+      color:#fff;
+      border:none;
+      padding:6px 10px;
+      border-radius:6px;
+      cursor:pointer;
+    ">✕ Close</button>
+
+    <iframe id="file-frame"
+      style="width:100%; height:100%; border:none;">
+    </iframe>
+
+  </div>
+</div>
 </body>
  <!-- FOOTER (unchanged) -->
   <footer>
@@ -812,10 +850,10 @@ if(dropdownToggle){
 
   });
 }
+
 	const SUPABASE_URL = "https://vwzhzycagqqhcxbopjtc.supabase.co";
-	const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ3emh6eWNhZ3FxaGN4Ym9wanRjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ1NjI4NjEsImV4cCI6MjA5MDEzODg2MX0.KajiaXQecd-Icu6D9XUKViBsRn4bldVfwoFeamog8ww";
 	const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ3emh6eWNhZ3FxaGN4Ym9wanRjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ1NjI4NjEsImV4cCI6MjA5MDEzODg2MX0.KajiaXQecd-Icu6D9XUKViBsRn4bldVfwoFeamog8ww";
-	const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, SUPABASE_ANON_KEY);
+	const supabaseClient = supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
 
 let isLogin = true;
 const authModal = document.getElementById("auth-modal");
@@ -848,7 +886,7 @@ async function loadUser(userId=null){
     const { data: profile } = await supabaseClient
       .from('profiles')
       .select('*')
-      .eq('user_id', user)
+      .eq('id', user)
       .single();
 
     // ✅ ROLE CHECK (IMPORTANT PART)
@@ -1099,286 +1137,97 @@ clearBtn.addEventListener("click", () => {
     </div>
   `).join("");
 }
+/*----FilePreview*/
+function openFilePreview(url) {
+  const modal = document.getElementById("file-modal");
+  const frame = document.getElementById("file-frame");
 
+  if (!url) {
+  alert("No file URL found in this record.");
+  return;
+}
 
+  // Google Docs viewer (works for PDF + DOCS)
+  const viewerUrl =
+    `https://docs.google.com/gview?url=${encodeURIComponent(url)}&embedded=true`;
+
+  frame.src = viewerUrl;
+  modal.style.display = "flex";
+}
+
+function closeFilePreview() {
+  document.getElementById("file-modal").style.display = "none";
+  document.getElementById("file-frame").src = "";
+}
+window.openFilePreview = openFilePreview;
+window.closeFilePreview = closeFilePreview;
 	/* ---------- RENDER ---------- */
 	function render(rows) {
-	  if (!rows.length) {
-		list.textContent = "No research found.";
-		return;
-	  }
+  if (!rows.length) {
+    list.textContent = "No research found.";
+    return;
+  }
 
-	  list.innerHTML = rows.map(r=>`
-		<div class="abstract-page">
+  list.innerHTML = rows.map(r => `
+    <div class="abstract-page">
       <div class="abstract-title">
         ${r.title}
-        <div class="abstract-meta">  ${firstAuthor(r.authors)} — ${getYear(r.research_date) || "—"}</div>
+        <div class="abstract-meta">
+          ${firstAuthor(r.authors)} — ${getYear(r.research_date) || "—"}
+        </div>
       </div>
 
       <div class="abstract-content">
         <div class="meta-grid">
           <div><strong>Authors:</strong></div>
-		<div>${toArray(r.authors).join("<br>") || "—"}</div>
+          <div>${toArray(r.authors).join("<br>") || "—"}</div>
 
-		<div><strong>Adviser:</strong></div>
-		<div>${toArray(r.advisers).join("<br>") || "—"}</div>
+          <div><strong>Adviser:</strong></div>
+          <div>${toArray(r.advisers).join("<br>") || "—"}</div>
 
-		<div><strong>Course:</strong></div>
-		<div>${toArray(r.course).join("<br>") || "—"}</div>
+          <div><strong>Course:</strong></div>
+          <div>${toArray(r.course).join("<br>") || "—"}</div>
 
-		<div><strong>SDG:</strong></div>
-		<div>${toArray(r.sdg).join(", ") || "—"}</div>
+          <div><strong>SDG:</strong></div>
+          <div>${toArray(r.sdg).join(", ") || "—"}</div>
 
+          <div><strong>Date:</strong></div>
+          <div>${r.research_date || ""}</div>
 
-          <div><strong>Date:</strong></div><div>${r.research_date||""}</div>
-          <div><strong>Keywords:</strong></div><div>${(r.keywords||[]).join(", ")}</div>
+          <div><strong>Keywords:</strong></div>
+          <div>${(r.keywords || []).join(", ")}</div>
         </div>
 
         <h4>EXECUTIVE SUMMARY</h4>
-		<p style="text-indent: 50px; text-align: justify;">${r.abstract||""}</p>
+        <p style="text-indent: 50px; text-align: justify;">
+          ${r.abstract || ""}
+        </p>
 
-		${renderSections(r.sections)}
+        ${
+          r.file_url
+            ? `
+              <br>
+              <button class="download-pdf"
+                onclick="openFilePreview('${r.file_url}')">
+                View Full File
+              </button>
+            `
+            : ""
+        }
 
-		<br>
-        <button class="download-pdf">Download PDF</button>
+        ${renderSections(r.sections || [])}
+
+        <br>
       </div>
     </div>
-	  `).join("");
+  `).join("");
 
-	  document.querySelectorAll(".abstract-title").forEach(t=>{
-		t.onclick = () => t.nextElementSibling.style.display =
-		  t.nextElementSibling.style.display === "block" ? "none" : "block";
-	  });
-
-	  // PDF download
-document.querySelectorAll(".download-pdf").forEach((btn, i) => {
-  btn.onclick = () => {
-
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF({ unit: "mm", format: "a4" });
-    const r = rows[i];
-
-    const pageWidthFull = doc.internal.pageSize.getWidth();
-    const pageHeight = doc.internal.pageSize.getHeight();
-    const marginLeft = 15;
-    const contentWidth = 180;
-    const headerHeight = 40;
-
-    const labelX = 15;
-    const valueX = 45;
-    const lineSpacing = 7;
-
-    const loadImage = (src) => {
-      return new Promise((resolve, reject) => {
-        const img = new Image();
-        img.src = src;
-        img.onload = () => resolve(img);
-        img.onerror = reject;
-      });
+  document.querySelectorAll(".abstract-title").forEach(t => {
+    t.onclick = () => {
+      const el = t.nextElementSibling;
+      el.style.display = el.style.display === "block" ? "none" : "block";
     };
-
-    loadImage("headerpdf.png").then(img => {
-
-      const addHeader = () => {
-        doc.addImage(img, "PNG", 0, 0, pageWidthFull, headerHeight);
-      };
-
-      addHeader();
-      let y = headerHeight + 15;
-
-      /* ---------- TITLE ---------- */
-      doc.setFontSize(12);
-      doc.setFont("helvetica", "bold");
-      const titleLines = doc.splitTextToSize(r.title || "", contentWidth);
-      doc.text(titleLines, marginLeft, y);
-      y += titleLines.length * 7 + 5;
-
-      doc.setFontSize(12);
-
-      /* ---------- AUTHORS ---------- */
-      doc.setFont("helvetica", "bold");
-      doc.text("Authors:", labelX, y);
-
-      doc.setFont("helvetica", "normal");
-      let metaY = y;
-
-      toArray(r.authors).forEach(name => {
-        const lines = doc.splitTextToSize(name.toUpperCase(), contentWidth - 35);
-        doc.text(lines, valueX, metaY);
-        metaY += lines.length * lineSpacing;
-      });
-
-      y = metaY + 5;
-
-      /* ---------- ADVISER ---------- */
-      if (r.advisers?.length) {
-        doc.setFont("helvetica", "bold");
-        doc.text("Adviser:", labelX, y);
-
-        doc.setFont("helvetica", "normal");
-        metaY = y;
-
-        toArray(r.advisers).forEach(name => {
-          const lines = doc.splitTextToSize(name, contentWidth - 35);
-          doc.text(lines, valueX, metaY);
-          metaY += lines.length * lineSpacing;
-        });
-
-        y = metaY + 5;
-      }
-
-      /* ---------- COURSE ---------- */
-      if (r.course?.length) {
-        doc.setFont("helvetica", "bold");
-        doc.text("Course:", labelX, y);
-
-        doc.setFont("helvetica", "normal");
-        const lines = doc.splitTextToSize(toArray(r.course).join(", "), contentWidth - 35);
-        doc.text(lines, valueX, y);
-        y += lines.length * lineSpacing + 5;
-      }
-
-      /* ---------- SDG ---------- */
-      if (r.sdg?.length) {
-        doc.setFont("helvetica", "bold");
-        doc.text("SDG:", labelX, y);
-
-        doc.setFont("helvetica", "normal");
-        const lines = doc.splitTextToSize(toArray(r.sdg).join(", "), contentWidth - 35);
-        doc.text(lines, valueX, y);
-        y += lines.length * lineSpacing + 5;
-      }
-
-      /* ---------- DATE ---------- */
-      if (r.research_date) {
-        doc.setFont("helvetica", "bold");
-        doc.text("Date:", labelX, y);
-
-        doc.setFont("helvetica", "normal");
-        const lines = doc.splitTextToSize(r.research_date, contentWidth - 35);
-        doc.text(lines, valueX, y);
-        y += lines.length * lineSpacing + 5;
-      }
-
-      /* ---------- KEYWORDS ---------- */
-      if (r.keywords?.length) {
-        doc.setFont("helvetica", "bold");
-        doc.text("Keywords:", labelX, y);
-
-        doc.setFont("helvetica", "normal");
-        const lines = doc.splitTextToSize((r.keywords || []).join(", "), contentWidth - 35);
-        doc.text(lines, valueX, y);
-        y += lines.length * lineSpacing + 5;
-      }
-
-	/* ---------- EXECUTIVE SUMMARY ---------- */
-	if (r.abstract) {
-	  doc.setFontSize(14);
-	  doc.setFont("helvetica", "bold");
-	  doc.text("EXECUTIVE SUMMARY", marginLeft, y);
-	  y += 10;
-
-	  doc.setFontSize(12);
-	  doc.setFont("helvetica", "normal");
-
-	  const lines = doc.splitTextToSize(r.abstract, contentWidth);
-
-	  const justifyLine = (text, x, y, width) => {
-		const words = text.trim().split(/\s+/);
-
-		if (words.length <= 1) {
-		  doc.text(text, x, y);
-		  return;
-		}
-
-		const wordsWidth = words.reduce((sum, word) => sum + doc.getTextWidth(word), 0);
-		const gapCount = words.length - 1;
-		const extraSpace = (width - wordsWidth) / gapCount;
-
-		let cursorX = x;
-
-		words.forEach((word, i) => {
-		  doc.text(word, cursorX, y);
-		  if (i < gapCount) {
-			cursorX += doc.getTextWidth(word) + extraSpace;
-		  }
-		});
-	  };
-
-	  lines.forEach((line, idx) => {
-		if (y > pageHeight - 15) {
-		  doc.addPage();
-		  addHeader();
-		  y = headerHeight + 15;
-		}
-
-		if (idx < lines.length - 1) {
-		  justifyLine(line, marginLeft, y, contentWidth);
-		} else {
-		  doc.text(line, marginLeft, y);
-		}
-
-		y += 7;
-	  });
-
-	  y += 10;
-	}
-
-	/* ---------- SECTIONS ---------- */
-	if (r.sections && r.sections.length) {
-
-	  r.sections.forEach(section => {
-
-		if (y > pageHeight - 20) {
-		  doc.addPage();
-		  addHeader();
-		  y = headerHeight + 15;
-		}
-
-		doc.setFont("helvetica", "bold");
-		doc.setFontSize(13);
-		doc.text(section.title || "", marginLeft, y);
-		y += 8;
-
-		doc.setFont("helvetica", "normal");
-		doc.setFontSize(12);
-
-		section.content.forEach(item => {
-
-		  if (item.type === "text") {
-
-			const lines = doc.splitTextToSize(item.value, contentWidth);
-
-			lines.forEach(line => {
-
-			  if (y > pageHeight - 15) {
-				doc.addPage();
-				addHeader();
-				y = headerHeight + 15;
-			  }
-
-			  doc.text(line, marginLeft, y);
-			  y += 7;
-			});
-
-			y += 3;
-		  }
-
-		});
-
-		y += 5;
-	  });
-	}
-	
-
-      doc.save(`${r.title || "research"}.pdf`);
-
-    }).catch(() => {
-      alert("Header image not found. Check file path.");
-    });
-
-  };
-});
+  });
 }
 	/* ---------- SEARCH ---------- */
 	search.oninput = () => {
