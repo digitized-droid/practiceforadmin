@@ -654,17 +654,8 @@ button.filter-btn{
 .settings-content input { width: 100%; padding: 6px; margin: 6px 0; border: 1px solid #ddd; border-radius: 5px; font-size: 0.85rem; } 
 .settings-content button { width: 100%; padding: 6px; margin-bottom: 8px; background: #1e3a8a; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 0.85rem; } 
 .settings-content button:hover { background: #2563eb; } #logoutBtn { display: block; margin-left: auto; /* pushes it to the right */ background: #1e3a8a; border-radius: 5px; color: white; margin-top: 10px; } 
-#logoutBtn {
-    width: auto;              /* ✅ NOT full width */
-    display: inline-block;    /* ✅ shrink to text size */
-    margin-left: auto;        /* ✅ push to right */
-    margin-top: 3px;
-    padding: 2px 4px;        /* ✅ nice button size */
-    background: #1e3a8a;
-    color: white;
-    border-radius: 5px;
-}
 #logoutBtn:hover { background:white; border-radius: 5px; color:#1e3a8a; } 
+
 /* AUTH MODAL */ 
 #auth-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 2000; align-items: center; justify-content: center; } 
 #auth-box { background: white; padding: 2rem; border-radius: 12px; width: 320px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.2); } 
@@ -793,8 +784,8 @@ button.filter-btn{
             <div class="settings-header"><span id="user-info">Not logged in</span></div>
             <hr>
             <div class="settings-content">
-              <input id="new-username" type="text" placeholder="New Username"><button id="change-username-btn">Change Username</button>
               <input id="new-email" type="email" placeholder="New Email"><button id="change-email-btn">Change Email</button>
+			  <input id="new-phone" type="text" placeholder="New Phone"><button id="change-phone-btn">Change Phone</button>
               <input id="new-password" type="password" placeholder="New Password"><button id="change-password-btn">Change Password</button>
             </div>
             <hr>
@@ -941,30 +932,63 @@ function setButtonState(button,state){
   else { button.disabled=false; button.textContent="Submit"; }
 }
 
-async function loadUser(userId=null){
-  const { data:{ session } } = await supabaseClient.auth.getSession();
-  const user = userId || (session && session.user && session.user.id);
+function toProperCase(str) {
+  return str
+    .toLowerCase()
+    .split(" ")
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
 
-  if(user){
-    const { data: profile } = await supabaseClient
-      .from('profiles')
-      .select('*')
-      .eq('id', user)
-      .single();
+async function loadUser(userId = null) {
+  try {
+    if (!userId) {
+      const { data } = await supabaseClient.auth.getSession();
+      userId = data?.session?.user?.id;
+    }
 
-    // ✅ ROLE CHECK (IMPORTANT PART)
-    if(!profile || (profile.role !== "user" && profile.role !== "admin")){
-      window.location.href = "index.html"; // silent redirect
+    // ❌ NOT LOGGED IN → REDIRECT
+    if (!userId) {
+      window.location.href = "index.html";
       return;
     }
 
-    // If allowed
-    userInfo.textContent = `Hello, ${profile?.display_name || "User"}`;
-    logoutBtn.style.display="block";
-    authModal.style.display="none";
+    const { data: profile, error } = await supabaseClient
+      .from("profiles")
+      .select("*")
+      .eq("id", userId)
+      .single();
 
-  } else {
-    // Not logged in → redirect instantly
+    // ❌ NO PROFILE → REDIRECT
+    if (error || !profile) {
+      window.location.href = "index.html";
+      return;
+    }
+
+    // ✅ DISPLAY NAME
+    const formattedName = profile.full_name
+  ? toProperCase(profile.full_name)
+  : "User";
+
+userInfo.textContent = `Hello, ${formattedName}`;
+    authModal.style.display = "none";
+
+    const currentPage = window.location.pathname.toLowerCase();
+
+    // ✅ ADMIN REDIRECT
+    if (profile.role === "admin" && !currentPage.includes("admin.html")) {
+      window.location.href = "admin.html";
+      return;
+    }
+
+    // ❌ NON-ADMIN trying to access admin page
+    if (profile.role !== "admin" && currentPage.includes("admin.html")) {
+      window.location.href = "home.html";
+      return;
+    }
+
+  } catch (err) {
+    console.error(err);
     window.location.href = "index.html";
   }
 }
@@ -972,35 +996,113 @@ async function loadUser(userId=null){
 // AUTH SUBMIT
 submitBtn.addEventListener("click", async ()=>{
   setButtonState(submitBtn,"loading");
+
   try{
-    const email=document.getElementById("email").value.trim();
-    const password=document.getElementById("password").value;
-    let student_number=document.getElementById("student_number").value.trim();
-    if(!student_number.toLowerCase().startsWith('m')){ alert("Student number missing/wrong"); setButtonState(submitBtn,"error"); return; }
-    student_number = student_number.replace(/^m/i,'');
-    if(isLogin){
-      const { data:loginData,error:loginError } = await supabaseClient.auth.signInWithPassword({ email, password });
-      if(loginError){ alert(loginError.message); setButtonState(submitBtn,"error"); return; }
-      const user = loginData?.user;
-      const { data: profiles, error: profileError } = await supabaseClient.from('profiles').select('*').eq('user_id', user.id);
-      const profile = profiles[0];
-      if(profile.student_number.replace(/^m/i,'') !== student_number){
-        await supabaseClient.auth.signOut(); alert("Incorrect student number"); setButtonState(submitBtn,"error"); return;
-      }
-      await loadUser(user.id);
-    }else{
-      const display_name=document.getElementById("display_name").value.trim();
-      const phone=document.getElementById("phone").value.trim();
-      const { data, error } = await supabaseClient.auth.signUp({ email,password,options:{ data:{ display_name, phone, student_number } } });
-      if(error){ alert(error.message); setButtonState(submitBtn,"error"); return; }
-      alert("Account created! Check your email to confirm.");
+    const email = document.getElementById("email").value.trim();
+    const password = document.getElementById("password").value;
+    let student_number = document.getElementById("student_number").value.trim();
+
+    if(!student_number.toLowerCase().startsWith('m')){
+      alert("Student number missing/wrong");
+      setButtonState(submitBtn,"error");
+      return;
     }
+
+    // normalize (remove M)
+    student_number = student_number.replace(/^m/i,'');
+
+    if(isLogin){
+      // ================= LOGIN =================
+      const { data:loginData, error:loginError } =
+        await supabaseClient.auth.signInWithPassword({ email, password });
+
+      if(loginError){
+        alert(loginError.message);
+        setButtonState(submitBtn,"error");
+        return;
+      }
+
+      const user = loginData?.user;
+
+      // ✅ FIX: use id instead of user_id
+      const { data: profile, error: profileError } =
+        await supabaseClient
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+
+      if(!profile){
+        await supabaseClient.auth.signOut();
+        alert("Profile not found");
+        setButtonState(submitBtn,"error");
+        return;
+      }
+
+      if(profile.student_number.replace(/^m/i,'') !== student_number){
+        await supabaseClient.auth.signOut();
+        alert("Incorrect student number");
+        setButtonState(submitBtn,"error");
+        return;
+      }
+
+      await loadUser(user.id);
+
+    } else {
+      // ================= SIGNUP =================
+      const display_name = document.getElementById("display_name").value.trim();
+      const phone = document.getElementById("phone").value.trim();
+
+      const { data, error } = await supabaseClient.auth.signUp({
+        email,
+        password
+      });
+
+      if(error){
+        alert(error.message);
+        setButtonState(submitBtn,"error");
+        return;
+      }
+
+      // ✅ SAVE TO PROFILES TABLE
+      if(data.user){
+        const { error: insertError } = await supabaseClient
+          .from("profiles")
+          .insert({
+            id: data.user.id,
+            email,
+            student_number,
+            full_name: display_name,
+            phone,
+            role: "user"
+          });
+
+        if(insertError){
+          console.error(insertError);
+          alert("Failed to save profile");
+          setButtonState(submitBtn,"error");
+          return;
+        }
+      }
+
+      alert("Account created! Check your email.");
+    }
+
     setButtonState(submitBtn,"normal");
-  }catch(err){ console.error(err); alert("Unexpected error"); setButtonState(submitBtn,"error"); }
+
+  } catch(err){
+    console.error(err);
+    alert("Unexpected error");
+    setButtonState(submitBtn,"error");
+  }
 });
 
-// LOGOUT
-logoutBtn.addEventListener("click", async ()=>{ await supabaseClient.auth.signOut(); loadUser(); });
+logoutBtn.addEventListener("click", async () => {
+  await supabaseClient.auth.signOut();
+
+  // ✅ FORCE REDIRECT
+  window.location.href = "index.html";
+});
 
 // REAL-TIME AUTH
 supabaseClient.auth.onAuthStateChange((event, session)=>{ loadUser(); });
@@ -1011,27 +1113,59 @@ const settingsDropdown=document.getElementById("settingsDropdown");
 gear.addEventListener("click", ()=>{ settingsDropdown.style.display = settingsDropdown.style.display==="block"?"none":"block"; });
 document.addEventListener("click", e=>{ if(!gear.contains(e.target) && !settingsDropdown.contains(e.target)) settingsDropdown.style.display="none"; });
 
-// CHANGE USERNAME/EMAIL/PASSWORD
-document.getElementById("change-username-btn").addEventListener("click", async ()=>{
-  const newUsername=document.getElementById("new-username").value.trim(); if(!newUsername){ alert("Enter valid username"); return; }
-  const { data:{ user } } = await supabaseClient.auth.getUser(); if(!user) return alert("Not logged in");
-  const { error } = await supabaseClient.from("profiles").update({ display_name:newUsername }).eq("user_id", user.id);
-  if(error) return alert(error.message); alert("Username updated!"); loadUser();
-});
-document.getElementById("change-email-btn").addEventListener("click", async ()=>{
-  const newEmail=document.getElementById("new-email").value.trim(); if(!newEmail){ alert("Enter valid email"); return; }
-  const { error } = await supabaseClient.auth.updateUser({ email:newEmail }); if(error) return alert(error.message);
+// CHANGE EMAIL
+document.getElementById("change-email-btn")?.addEventListener("click", async () => {
+  const newEmail = document.getElementById("new-email").value.trim();
+  if (!newEmail) return alert("Enter valid email");
+
+  const { error } = await supabaseClient.auth.updateUser({ email: newEmail });
+  if (error) return alert(error.message);
+
   alert("Check your new email to confirm.");
 });
-document.getElementById("change-password-btn").addEventListener("click", async ()=>{
-  const newPassword=document.getElementById("new-password").value; if(newPassword.length<6){ alert("Password min 6 chars"); return; }
-  const { error } = await supabaseClient.auth.updateUser({ password:newPassword }); if(error) return alert(error.message);
+
+// CHANGE PHONE
+document.getElementById("change-phone-btn")?.addEventListener("click", async () => {
+  const val = document.getElementById("new-phone").value.trim();
+  if (!val) return alert("Enter phone number");
+
+  const { data: { user } } = await supabaseClient.auth.getUser();
+  if (!user) return alert("Not logged in");
+
+  const { error } = await supabaseClient
+    .from("profiles")
+    .update({ phone: val })
+    .eq("id", user.id);
+
+  if (error) return alert(error.message);
+
+  alert("Phone updated!");
+});
+
+// CHANGE PASSWORD
+document.getElementById("change-password-btn")?.addEventListener("click", async () => {
+  const newPassword = document.getElementById("new-password").value;
+  if (newPassword.length < 6) return alert("Password must be at least 6 characters");
+
+  const { error } = await supabaseClient.auth.updateUser({ password: newPassword });
+  if (error) return alert(error.message);
+
   alert("Password updated!");
 });
 
-// PAGE LOAD CHECK
-loadUser();
+// ================= AUTH STATE LISTENER =================
+supabaseClient.auth.onAuthStateChange((_event, session) => {
+  if (session?.user) {
+    loadUser(session.user.id);
+  } else {
+    if (userInfo) userInfo.textContent = "Not logged in";
+  }
+});
 
+// ================= INITIAL LOAD =================
+document.addEventListener("DOMContentLoaded", () => {
+  loadUser();
+});
 
 
 
