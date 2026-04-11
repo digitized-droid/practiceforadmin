@@ -700,11 +700,11 @@ button.active-filter:focus {
 </header>
 <body>
 <br>
-<div id="filePreviewModal" class="editmodal">
+<div id="openFilePreview" class="editmodal">
   <div class="editmodal-body" style="padding:0; height:95vh;">
     <div style="display:flex; justify-content:space-between; padding:10px;">
       <h3>File Preview</h3>
-      <button onclick="closePreview()">Close</button>
+      <button onclick="closeFilePreview()">Close</button>
     </div>
 
     <iframe id="filePreviewFrame"
@@ -712,6 +712,8 @@ button.active-filter:focus {
     </iframe>
   </div>
 </div>
+
+
 <!-- Edit Modal (hidden by default) -->
 <div id="editModal" class="editmodal">
   <div class="editmodal-body">
@@ -1077,7 +1079,7 @@ button.active-filter:focus {
           <button class="edit-btn" onclick="editResearch(${JSON.stringify(r.id)})">Edit</button>
 	
           ${r.file_url ? `
-            <button class="view-btn" onclick="viewFile('${r.file_url}')">
+            <button class="view-btn" onclick="openFilePreview('${r.file_url}')">
               View PDF/DOC
             </button>
           ` : ""}
@@ -1230,29 +1232,32 @@ button.active-filter:focus {
 	}
 	
 	/* ---------- View Function of PDF ---------- */
-	window.viewFile = (url) => {
-  if (!url) return;
-
-  const modal = document.getElementById("filePreviewModal");
+	function openFilePreview(url) {
+  const modal = document.getElementById("openFilePreview");
   const frame = document.getElementById("filePreviewFrame");
 
-  const isPDF = url.toLowerCase().includes(".pdf");
-
-  if (isPDF) {
-    // clean inline preview
-    frame.src = url;
-  } else {
-    // DOC/DOCX preview via Google Docs Viewer
-    frame.src = `https://docs.google.com/gview?url=${encodeURIComponent(url)}&embedded=true`;
+  if (!url) {
+    alert("No file URL found in this record.");
+    return;
   }
 
-  modal.style.display = "flex";
-};
+  const viewerUrl =
+    `https://docs.google.com/gview?url=${encodeURIComponent(url)}&embedded=true`;
 
-window.closePreview = () => {
-  document.getElementById("filePreviewModal").style.display = "none";
-  document.getElementById("filePreviewFrame").src = "";
-};
+  frame.src = viewerUrl;
+  modal.style.display = "flex";
+}
+
+function closeFilePreview() {
+  const modal = document.getElementById("openFilePreview");
+  const frame = document.getElementById("filePreviewFrame");
+
+  modal.style.display = "none";
+  frame.src = "";
+}
+
+window.openFilePreview = openFilePreview;
+window.closeFilePreview = closeFilePreview;
 	/* ---------- COLLAPSIBLE FORM ---------- */
 	const toggleBtn = document.getElementById("toggle-upload");
 	const formWrapper = document.getElementById("uploadFormWrapper");
