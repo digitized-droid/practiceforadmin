@@ -1523,7 +1523,7 @@ window.del = async (id) => {
 	/* ---------- EDIT ---------- */
 	window.editResearch = async (id) => {
 
-  const record = dataCache.find(r => r.id === id);
+  const record = dataCache.find(r => String(r.id) === String(id));
 
   if (!record) {
     alert("Record not found");
@@ -1557,41 +1557,95 @@ window.del = async (id) => {
   };
 
   // Submit update
-  const form = document.getElementById("editForm");
+const form = document.getElementById("editForm");
 
-  form.onsubmit = async (e) => {
-    e.preventDefault();
+// remove previous listeners safely
+const newForm = form.cloneNode(true);
+form.parentNode.replaceChild(newForm, form);
 
-    const updated = {
-      title: document.getElementById("editTitle").value.trim(),
-      authors: document.getElementById("editAuthors").value
-        .split(",").map(a => a.trim()).filter(Boolean).join("\n"),
-      course: document.getElementById("editCourse").value.trim(),
-      academic_year: document.getElementById("editYear").value.trim(),
-      research_date: document.getElementById("editDate").value.trim(),
-      abstract: document.getElementById("editAbstract").value.trim(),
-      keywords: document.getElementById("editKeywords").value
-        .split(",").map(k => k.trim()).filter(Boolean),
-      advisers: document.getElementById("editAdvisers").value
-        .split(",").map(a => a.trim()).filter(Boolean).join("\n"),
-      sdg: toSDGArray(document.getElementById("editSDG").value)
-    };
-
-    const { error } = await supabaseClient
-      .from("researches")
-      .update(updated)
-      .eq("id", id);
-
-    if (error) {
-      alert(error.message);
-    } else {
-      alert("Research updated successfully!");
-      closeModal();
-      load();
-    }
-  };
+newForm.querySelector("#cancelEdit").onclick = () => {
+  document.getElementById("editModal").style.display = "none";
 };
-	});
+
+// submit handler
+newForm.onsubmit = async (e) => {
+  e.preventDefault();
+
+  let fileUrl = record.file_url;
+  const fileInput = document.getElementById("research_file");
+
+  // ✅ If user selected a new file
+  if (fileInput && fileInput.files.length > 0) {
+    const file = fileInput.files[0];
+    const fileName = Date.now() + "_" + file.name;
+
+    // OPTIONAL: delete old file
+    if (record.file_url) {
+      const oldPath = record.file_url.split("/research-files/")[1];
+
+      await supabaseClient.storage
+        .from("research-files")
+        .remove([oldPath]);
+    }
+
+    // upload new file
+    const { error: uploadError } = await supabaseClient
+      .storage
+      .from("research-files")
+      .upload(fileName, file, {
+        contentType: file.type,
+        upsert: false
+      });
+
+    if (uploadError) {
+      alert("File upload failed");
+      console.error(uploadError);
+      return;
+    }
+
+    const { data: publicUrl } = supabaseClient
+      .storage
+      .from("research-files")
+      .getPublicUrl(fileName);
+
+    fileUrl = publicUrl.publicUrl;
+  }
+
+  const updated = {
+    title: document.getElementById("editTitle").value.trim(),
+    authors: document.getElementById("editAuthors").value
+      .split(",").map(a => a.trim()).filter(Boolean).join("\n"),
+    course: document.getElementById("editCourse").value.trim(),
+    academic_year: document.getElementById("editYear").value.trim(),
+    research_date: document.getElementById("editDate").value.trim(),
+    abstract: document.getElementById("editAbstract").value.trim(),
+    keywords: document.getElementById("editKeywords").value
+      .split(",").map(k => k.trim()).filter(Boolean),
+    advisers: document.getElementById("editAdvisers").value
+      .split(",").map(a => a.trim()).filter(Boolean).join("\n"),
+    sdg: toSDGArray(document.getElementById("editSDG").value),
+
+    // ✅ IMPORTANT: update file
+    file_url: fileUrl
+  };
+
+  const { error } = await supabaseClient
+    .from("researches")
+    .update(updated)
+    .eq("id", id);
+
+  if (error) {
+    alert(error.message);
+    return;
+  }
+
+  alert("Research updated successfully!");
+  document.getElementById("editModal").style.display = "none";
+  load();
+};
+
+};
+});
 	</script>
 <script src="settings.js"></script>
 <script>
