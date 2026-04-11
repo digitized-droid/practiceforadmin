@@ -311,7 +311,7 @@
             margin-bottom: 1.5rem;
         }
 
-        button:not(.download-pdf):not(.hamburger):not(#logoutBtn):not(.settings-content button) {
+        button:not(.download-pdf):not(#logoutBtn):not(.settings-content button):not(.close-btn) {
             background: #f0f2f5;
             border: none;
             padding: 6px 12px;
@@ -321,10 +321,10 @@
             transition: all 0.2s;
         }
 
-       button:hover:not(.download-pdf):not(#logoutBtn):not(.settings-content button) {
-            background: var(--secondary-blue);
-            color: white;
-        }
+      button:hover:not(.download-pdf):not(#logoutBtn):not(.settings-content button):not(.close-btn) {
+    background: var(--secondary-blue);
+    color: white;
+}
 /* CLEAR FILTER BUTTON */
 button.clearbtn{
     background:#ffffff;   /* your color */
@@ -670,7 +670,95 @@ button.filter-btn{
 #auth-box { background: white; padding: 2rem; border-radius: 12px; width: 320px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.2); } 
 #auth-box input { width: 100%; margin: 10px 0; padding: 10px; } 
 #auth-box button { width: 100%; padding: 10px; margin-top: 10px; background: #1e3a8a; color: white; border: none; cursor: pointer; } 
-    </style>
+   
+/* MODAL BACKDROP */
+.file-modal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.65);
+  backdrop-filter: blur(6px);
+  z-index: 9999;
+
+  align-items: center;
+  justify-content: center;
+
+  animation: fadeIn 0.25s ease;
+}
+
+/* MODAL BOX */
+.file-box {
+  width: 90%;
+  height: 90%;
+  background: #ffffff;
+  border-radius: 14px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+
+  box-shadow: 0 20px 50px rgba(0,0,0,0.25);
+  animation: scaleIn 0.25s ease;
+}
+
+/* HEADER */
+.file-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 18px;
+  background: #1e3a8a;
+  color: white;
+  font-weight: 600;
+}
+
+/* CLOSE BUTTON */
+.close-btn {
+  background: transparent;
+  border: none;
+  font-size: 20px;
+  color: white;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.close-btn:hover {
+  transform: scale(1.2);
+  color: #fbbf24;
+}
+
+/* IFRAME */
+#file-frame {
+  flex: 1;
+  width: 100%;
+  border: none;
+}
+
+/* ANIMATIONS */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes scaleIn {
+  from {
+    transform: scale(0.95);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* MOBILE */
+@media (max-width: 600px) {
+  .file-box {
+    width: 100%;
+    height: 100%;
+    border-radius: 0;
+  }
+}
+   </style>
 </head>
 <header>
     <div class="container header-container">
@@ -773,44 +861,19 @@ button.filter-btn{
 
 </main>
 <!-- FILE PREVIEW MODAL -->
-<div id="file-modal" style="
-  display:none;
-  position:fixed;
-  top:0; left:0;
-  width:100%; height:100%;
-  background:rgba(0,0,0,0.7);
-  z-index:9999;
-  align-items:center;
-  justify-content:center;
-">
+<div id="file-modal" class="file-modal">
 
-  <div style="
-    width:90%;
-    height:90%;
-    background:#fff;
-    border-radius:10px;
-    overflow:hidden;
-    position:relative;
-  ">
+  <div class="file-box">
 
-    <button onclick="closeFilePreview()" style="
-      position:absolute;
-      top:10px;
-      right:10px;
-      z-index:10;
-      background:#1e3a8a;
-      color:#fff;
-      border:none;
-      padding:6px 10px;
-      border-radius:6px;
-      cursor:pointer;
-    ">✕ Close</button>
+    <div class="file-header">
+      <span id="file-title">Document Preview</span>
+      <button class="close-btn" onclick="closeFilePreview()">✕</button>
+    </div>
 
-    <iframe id="file-frame"
-      style="width:100%; height:100%; border:none;">
-    </iframe>
+    <iframe id="file-frame"></iframe>
 
   </div>
+
 </div>
 </body>
  <!-- FOOTER (unchanged) -->
@@ -1209,7 +1272,7 @@ window.closeFilePreview = closeFilePreview;
               <br>
               <button class="download-pdf"
                 onclick="openFilePreview('${r.file_url}')">
-                View Full File
+                View File
               </button>
             `
             : ""
