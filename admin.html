@@ -643,7 +643,26 @@ button.active-filter:focus {
     color:  #FF8C00;
     font-weight: 600;
 }
+.view-btn {
+    margin-top: 10px;
+    padding: 6px 10px;
+    border: none;
+    border-radius: 4px;
+    background: #2e7d32;
+    color: white;
+    margin-left: 5px;
+    cursor: pointer;
+}
 
+.view-btn:hover {
+    background: #1b5e20;
+}
+.action-buttons {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+    flex-wrap: wrap;
+}
 </style>
 </head>
 <header>
@@ -681,7 +700,18 @@ button.active-filter:focus {
 </header>
 <body>
 <br>
+<div id="filePreviewModal" class="editmodal">
+  <div class="editmodal-body" style="padding:0; height:95vh;">
+    <div style="display:flex; justify-content:space-between; padding:10px;">
+      <h3>File Preview</h3>
+      <button onclick="closePreview()">Close</button>
+    </div>
 
+    <iframe id="filePreviewFrame"
+            style="width:100%; height:100%; border:none;">
+    </iframe>
+  </div>
+</div>
 <!-- Edit Modal (hidden by default) -->
 <div id="editModal" class="editmodal">
   <div class="editmodal-body">
@@ -710,17 +740,12 @@ button.active-filter:focus {
 
       <label>Abstract</label>
       <textarea id="editAbstract" rows="6"></textarea>
-	
-	<hr>
-	<h3>Chapters / Sections</h3>
-
-	<div id="editSectionsContainer"></div>
-	<button type="button" onclick="addEditSection()">Add Section</button>
 		
       <label>Keywords (comma separated)</label>
       <input type="text" id="editKeywords">
 	  
-	  
+	  <label>Full Research File (PDF or DOC/DOCX)</label>
+<input type="file" id="research_file" accept=".pdf,.doc,.docx">
 
       <div class="form-actions">
         <button type="submit" class="save">Save</button>
@@ -769,13 +794,9 @@ button.active-filter:focus {
 
             <label>Abstract</label>
             <textarea id="abstract" rows="4"></textarea>
-			
-			<hr>
-			<h3>Chapters / Sections</h3>
 
-			<div id="sectionsContainer"></div>
-
-			<button type="button" onclick="addSection()">+ Add Section</button>
+			<label>Full Research File (PDF or DOC/DOCX)</label>
+			<input type="file" id="upload_research_file" accept=".pdf,.doc,.docx">
 
             <label>Keywords (comma separated)</label>
             <input type="text" id="keywords" placeholder="e.g., Key, Words">
@@ -1009,79 +1030,70 @@ button.active-filter:focus {
 
 	  render(filtered);
 	}
-
-	function renderSections(sections) {
-	  if (!sections || !Array.isArray(sections)) return "";
-
-	  return sections.map(sec => `
-		<div class="section">
-		  <h3>${sec.title}</h3>
-
-		  ${sec.content.map(item => {
-			if (item.type === "text") {
-			  return `<p>${item.value}</p>`;
-			}
-
-			if (item.type === "image") {
-			  return `<img src="${item.value}" style="max-width:100%; margin:10px 0;">`;
-			}
-
-			return "";
-		  }).join("")}
-
-		</div>
-	  `).join("");
-	}
-
+	
 	function render(rows) {
-	  if (!rows.length) {
-		list.textContent = "No research found.";
-		return;
-	  }
+  if (!rows.length) {
+    list.textContent = "No research found.";
+    return;
+  }
 
-	  list.innerHTML = rows.map(r=>`
-		<div class="abstract-page">
-		  <div class="abstract-title">
-			${r.title}
-			<div class="abstract-meta">${firstAuthor(r.authors)} — ${r.academic_year||"—"}</div>
-		  </div>
+  list.innerHTML = rows.map(r => `
+    <div class="abstract-page">
+      
+      <div class="abstract-title">
+        ${r.title}
+        <div class="abstract-meta">
+          ${firstAuthor(r.authors)} — ${r.academic_year || "—"}
+        </div>
+      </div>
 
-		  <div class="abstract-content">
-		   <div class="meta-grid">
-	  <div>Authors</div>
-	  <div>${toArray(r.authors).join("<br>")}</div>
+      <div class="abstract-content">
 
-	  <div>Advisers</div>
-	  <div>${toArray(asText(r.advisers)).join("<br>")
-	}</div>
+        <div class="meta-grid">
+          <div>Authors</div>
+          <div>${toArray(r.authors).join("<br>")}</div>
 
-	  <div>Course</div>
-	  <div>${toArray(r.course).join("<br>")}</div>
+          <div>Advisers</div>
+          <div>${toArray(asText(r.advisers)).join("<br>")}</div>
 
-	  <div>SDG</div>
-	  <div>${toSDGArray(r.sdg).join(", ")}</div>
+          <div>Course</div>
+          <div>${toArray(r.course).join("<br>")}</div>
 
-	  <div>Date</div>
-	  <div>${r.research_date||""}</div>
+          <div>SDG</div>
+          <div>${toSDGArray(r.sdg).join(", ")}</div>
 
-	  <div>Keywords</div>
-	  <div>${toKeywordArray(r.keywords).join(", ")}</div>
-	</div>
+          <div>Date</div>
+          <div>${r.research_date || ""}</div>
 
+          <div>Keywords</div>
+          <div>${toKeywordArray(r.keywords).join(", ")}</div>
+        </div>
 
-			<p><strong>EXECUTIVE SUMMARY</strong><br>${r.abstract||""}</p>
-			${renderSections(r.sections)}
-			<button class="delete-btn" onclick="del(${JSON.stringify(r.id)})">Delete</button>
-			<button class="edit-btn" onclick="editResearch(${JSON.stringify(r.id)})">Edit</button>
-		  </div>
-		</div>
-	  `).join("");
+        <p><strong>EXECUTIVE SUMMARY</strong><br>${r.abstract || ""}</p>
 
-	  document.querySelectorAll(".abstract-title").forEach(t=>{
-		t.onclick=()=>t.nextElementSibling.style.display =
-		  t.nextElementSibling.style.display==="block"?"none":"block";
-	  });
-	}
+        <!-- ACTION ROW (NEW FIX) -->
+        <div class="action-buttons">
+          <button class="delete-btn" onclick="del(${JSON.stringify(r.id)})">Delete</button>
+          <button class="edit-btn" onclick="editResearch(${JSON.stringify(r.id)})">Edit</button>
+	
+          ${r.file_url ? `
+            <button class="view-btn" onclick="viewFile('${r.file_url}')">
+              View PDF/DOC
+            </button>
+          ` : ""}
+        </div>
+
+      </div>
+    </div>
+  `).join("");
+
+  document.querySelectorAll(".abstract-title").forEach(t => {
+    t.onclick = () => {
+      const content = t.nextElementSibling;
+      content.style.display = content.style.display === "block" ? "none" : "block";
+    };
+  });
+}
 
 	/* ---------- SEARCH ---------- */
 	search.oninput = () => {
@@ -1133,7 +1145,7 @@ button.active-filter:focus {
 		container.appendChild(btn);
 	  });
 	}
-
+	
 	function renderSDGs(data){
 	  const m = {};
 
@@ -1216,7 +1228,31 @@ button.active-filter:focus {
 		  container.appendChild(btn);
 		});
 	}
+	
+	/* ---------- View Function of PDF ---------- */
+	window.viewFile = (url) => {
+  if (!url) return;
 
+  const modal = document.getElementById("filePreviewModal");
+  const frame = document.getElementById("filePreviewFrame");
+
+  const isPDF = url.toLowerCase().includes(".pdf");
+
+  if (isPDF) {
+    // clean inline preview
+    frame.src = url;
+  } else {
+    // DOC/DOCX preview via Google Docs Viewer
+    frame.src = `https://docs.google.com/gview?url=${encodeURIComponent(url)}&embedded=true`;
+  }
+
+  modal.style.display = "flex";
+};
+
+window.closePreview = () => {
+  document.getElementById("filePreviewModal").style.display = "none";
+  document.getElementById("filePreviewFrame").src = "";
+};
 	/* ---------- COLLAPSIBLE FORM ---------- */
 	const toggleBtn = document.getElementById("toggle-upload");
 	const formWrapper = document.getElementById("uploadFormWrapper");
@@ -1331,361 +1367,143 @@ button.active-filter:focus {
 
 	  doc.save("URSM_Research_Collection_Report.pdf");
 	};
-	/* ---------- PASSWORD PROTECTION ---------- */
-
-
-
-	let sectionCount = 0;
-
-	function addSection() {
-	  sectionCount++;
-	  
-	  const container = document.getElementById("sectionsContainer");
-
-	const block = document.createElement("div");
-	block.classList.add("section-block");
-
-	block.style.border = "1px solid #ccc";
-	block.style.padding = "10px";
-	block.style.marginBottom = "10px";
-	block.style.borderRadius = "6px";
-	block.style.backgroundColor = "#f9f9f9";
-
-	block.innerHTML = `
-	<label>Section Title</label>
-	<input type="text" class="section-title">
-
-	<label>Section Text</label>
-	<textarea class="section-text"></textarea>
-
-	<button type="button" onclick="this.parentElement.remove()">Remove Section</button>
-	`;
-
-	container.appendChild(block);
-	}
-
-	/* ---------- EDIT SECTIONS ---------- */
-
-	function addEditSection(title = "", text = "", images = []) {
-  const container = document.getElementById("editSectionsContainer");
-
-  const block = document.createElement("div");
-  block.classList.add("section-block");
-  block.style.border = "1px solid #ccc";
-  block.style.padding = "10px";
-  block.style.marginBottom = "10px";
-  block.style.borderRadius = "6px";
-  block.style.backgroundColor = "#f9f9f9";
-
-  block.innerHTML = `
-    <label>Section Title</label>
-    <input type="text" class="section-title" value="${title}">
-
-    <label>Section Text</label>
-    <textarea class="section-text">${text}</textarea>
-
-    <label>Section Images</label>
-    <div class="section-images">
-      ${images.map(img => `
-        <div class="image-wrapper" style="position:relative; margin-bottom:8px;">
-          <img src="${img}" style="max-width:100%; display:block;"/>
-          <button type="button" style="position:absolute; top:0; right:0;" onclick="this.parentElement.remove()">Remove</button>
-        </div>
-      `).join("")}
-    </div>
-
-    <input type="file" multiple class="section-image-upload">
-
-    <button type="button" onclick="this.parentElement.remove()">Remove Section</button>
-  `;
-
-  // Handle newly uploaded images
-  const fileInput = block.querySelector(".section-image-upload");
-  const imagesContainer = block.querySelector(".section-images");
-
-  fileInput.addEventListener("change", async e => {
-    const files = Array.from(e.target.files);
-
-    for (const file of files) {
-      // Upload to Supabase Storage or generate local URL for preview
-      const url = URL.createObjectURL(file); // Temporary preview
-      const wrapper = document.createElement("div");
-      wrapper.classList.add("image-wrapper");
-      wrapper.style.position = "relative";
-      wrapper.style.marginBottom = "8px";
-
-      wrapper.innerHTML = `
-        <img src="${url}" style="max-width:100%; display:block;"/>
-        <button type="button" style="position:absolute; top:0; right:0;" onclick="this.parentElement.remove()">Remove</button>
-      `;
-      imagesContainer.appendChild(wrapper);
-    }
-
-    fileInput.value = ""; // Reset input
-  });
-
-  container.appendChild(block);
-}
-
-	/* ---------- COLLECT SECTIONS ---------- */
-
-	function collectSections(containerId) {
-  const container = document.getElementById(containerId);
-  const sections = [];
-
-  container.querySelectorAll(".section-block").forEach(block => {
-    const title = block.querySelector(".section-title").value;
-    const text = block.querySelector(".section-text").value;
-
-    const content = [];
-    if (text) content.push({ type: "text", value: text });
-
-    block.querySelectorAll(".section-images img").forEach(img => {
-      content.push({ type: "image", value: img.src });
-    });
-
-    if (!title && !content.length) return;
-
-    sections.push({ title, content });
-  });
-
-  return sections;
-}
-
-
-
+	/* ---------- COLLAPSIBLE FORM ---------- */
 	const uploadForm = document.getElementById("uploadForm");
 
 	uploadForm.onsubmit = async e =>{
-	  e.preventDefault();
-	  
-	  // no password check
+  e.preventDefault();
 
-	  const title = document.getElementById("title").value.trim();
-	 const sdg = toSDGArray(document.getElementById("sdg").value);
-	  const authors = document.getElementById("authors").value
-		.split(",").map(a=>a.trim()).filter(Boolean).join("\n");
-	  const advisers = document.getElementById("advisers").value
-	  .split(",").map(a=>a.trim()).filter(Boolean).join("\n");
-	  const course = document.getElementById("course").value.trim();
-	  const major = document.getElementById("major").value.trim();
-	  const academic_year = document.getElementById("academic_year").value.trim();
-	  const research_date = document.getElementById("research_date").value.trim();
-	  const abstract = document.getElementById("abstract").value.trim();
-	  const keywords = document.getElementById("keywords").value
-		.split(",").map(k=>k.trim()).filter(Boolean);
+  const title = document.getElementById("title").value.trim();
+  const sdg = toSDGArray(document.getElementById("sdg").value);
 
-	  const combinedCourse = course + (major ? "\nMajor in " + major : "");
-		const sectionBlocks = document.querySelectorAll(".section-block");
+  const authors = document.getElementById("authors").value
+    .split(",").map(a=>a.trim()).filter(Boolean).join("\n");
 
-	let sections = [];
+  const advisers = document.getElementById("advisers").value
+    .split(",").map(a=>a.trim()).filter(Boolean).join("\n");
 
-	for (const block of sectionBlocks) {
-	  const title = block.querySelector(".section-title").value;
+  const course = document.getElementById("course").value.trim();
+  const major = document.getElementById("major").value.trim();
+  const academic_year = document.getElementById("academic_year").value.trim();
+  const research_date = document.getElementById("research_date").value.trim();
+  const abstract = document.getElementById("abstract").value.trim();
 
-	  const content = [];
+  const keywords = document.getElementById("keywords").value
+    .split(",").map(k=>k.trim()).filter(Boolean);
 
-	  const elements = block.querySelector(".section-content").children;
+  const combinedCourse = course + (major ? "\nMajor in " + major : "");
+  const fileInput = document.getElementById("upload_research_file");	
+	let fileUrl = null;
+	if (fileInput.files.length > 0) {
+  const file = fileInput.files[0];
 
-	  for (const el of elements) {
+  const allowedTypes = [
+    "application/pdf",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+  ];
 
-		if (el.classList.contains("section-text")) {
-		  content.push({
-			type: "text",
-			value: el.value
-		  });
-		}
+  const allowedExt = [".pdf", ".doc", ".docx"];
 
-		if (el.classList.contains("section-image")) {
-	  if (el.files.length > 0) {
-		const file = el.files[0];
+  const fileName = file.name.toLowerCase();
 
-		// 🔥 ONLY allow images
-		if (!file.type.startsWith("image/")) {
-		  alert("Only image files are allowed!");
-		  continue;
-		}
+  const isValidType = allowedTypes.includes(file.type);
+  const isValidExt = allowedExt.some(ext => fileName.endsWith(ext));
 
-		const url = await uploadImage(file);
-
-		// 🔥 ONLY push if upload succeeded
-		if (url) {
-		  content.push({
-			type: "image",
-			value: url
-		  });
-		} else {
-		  alert("Image upload failed!");
-		}
-	  }
-	}
-	  }
-
-	  sections.push({ title, content });
-	}
-	  const { data, error } = await supabaseClient.from("researches").insert([{
-		title,
-		sdg,
-		authors,
-		advisers,
-		course: combinedCourse,
-		academic_year,
-		research_date,
-		abstract,
-		keywords,
-		sections
-	  }]);
-
-	  if (error) alert(error.message);
-	  else {
-		alert("Research uploaded successfully!");
-		uploadForm.reset();
-		load();
-	  }
-	};
+  if (!isValidType || !isValidExt) {
+    alert("Only PDF, DOC, and DOCX files are allowed.");
+    fileInput.value = "";
+    return;
+  }
+}
 	
-	window.addSection = function() {
-	  const container = document.getElementById("sectionsContainer");
+	if (fileInput.files.length > 0) {
 
-	  const sectionDiv = document.createElement("div");
-	  sectionDiv.className = "section-block";
+	  const file = fileInput.files[0];
+	  const fileName = Date.now() + "_" + file.name;
 
-	  sectionDiv.innerHTML = `
-		<hr>
-		<label>Section Title</label>
-		<input type="text" class="section-title" placeholder="Chapter 1">
-
-		<div class="section-content"></div>
-
-		<button type="button" onclick="addText(this)">+ Text</button>
-		<button type="button" onclick="addImage(this)">+ Image</button>
-	  `;
-
-	  container.appendChild(sectionDiv);
-	}
-	window.addEditSection = function() {
-
-  const container = document.getElementById("editSectionsContainer");
-
-  const block = document.createElement("div");
-  block.className = "section-block";
-
-  block.innerHTML = `
-    <hr>
-    <label>Section Title</label>
-    <input type="text" class="section-title">
-
-    <div class="section-content"></div>
-
-    <button type="button" onclick="addEditText(this)">+ Text</button>
-    <button type="button" onclick="addEditImage(this)">+ Image</button>
-    <button type="button" onclick="this.parentElement.remove()">Remove Section</button>
-  `;
-
-  container.appendChild(block);
-}
-
-window.addEditText = function(btn) {
-
-  const contentDiv = btn.parentElement.querySelector(".section-content");
-
-  const textarea = document.createElement("textarea");
-  textarea.className = "section-text";
-  textarea.placeholder = "Enter text...";
-  contentDiv.appendChild(textarea);
-}
-
-window.addEditImage = function(btn) {
-
-  const contentDiv = btn.parentElement.querySelector(".section-content");
-
-  const input = document.createElement("input");
-  input.type = "file";
-  input.accept = "image/*";
-  input.className = "section-image";
-
-  contentDiv.appendChild(input);
-}
-
-
-	window.addText = function(btn) {
-	  const contentDiv = btn.parentElement.querySelector(".section-content");
-
-	  const textarea = document.createElement("textarea");
-	  textarea.className = "section-text";
-	  textarea.placeholder = "Enter text...";
-	  contentDiv.appendChild(textarea);
-	}
-
-	window.addImage = function(btn) {
-	  const contentDiv = btn.parentElement.querySelector(".section-content");
-
-	  const input = document.createElement("input");
-	  input.type = "file";
-	input.accept = "image/*"; // 🔥 prevents CSV selection
-	  input.className = "section-image";
-	  contentDiv.appendChild(input);
-	}
-
-
-	async function uploadImage(file) {
-	  const fileName = Date.now() + "_" + file.name.replace(/\s+/g, "_");
-
-	  const { error } = await supabaseClient
-		.storage
-		.from("research-images")
-		.upload(fileName, file);
+	  const { data, error } = await supabaseClient
+	  .storage
+	  .from("research-files")
+	  .upload(fileName, file, {
+		contentType: file.type,
+		upsert: false,
+		cacheControl: "3600",
+		contentDisposition: "inline"
+	  });
 
 	  if (error) {
-		console.error("Upload error:", error);
-		return null;
+		alert("File upload failed");
+		console.error(error);
+		return;
 	  }
 
-	  const { data } = supabaseClient
+	  const { data: publicUrl } = supabaseClient
 		.storage
-		.from("research-images")
+		.from("research-files")
 		.getPublicUrl(fileName);
 
-	  return data.publicUrl;
+	  fileUrl = publicUrl.publicUrl;
 	}
 
-
+  const { error } = await supabaseClient
+    .from("researches")
+    .insert([{
+      title,
+      sdg,
+      authors,
+      advisers,
+      course: combinedCourse,
+      academic_year,
+      research_date,
+      abstract,
+      keywords,
+      file_url: fileUrl
+    }]);
+	
+	
+	
+  if (error) {
+    alert(error.message);
+  } else {
+    alert("Research uploaded successfully!");
+    uploadForm.reset();
+    load();
+  }
+};
+	
+	/*---DELETE---*/
 window.del = async (id) => {
   if (!confirm("Delete this research?")) return;
 
-  const record = dataCache.find(r => r.id === id);
-  if (!record) return alert("Record not found");
+  // 1. Get record first (to get file_url)
+  const { data: record, error: fetchError } = await supabaseClient
+    .from("researches")
+    .select("*")
+    .eq("id", id)
+    .single();
+
+  if (fetchError || !record) {
+    alert("Record not found");
+    return;
+  }
 
   try {
-    // ---------------- DELETE IMAGES FIRST ----------------
-    const imagesToDelete = [];
+    // 2. Delete file from storage FIRST (if exists)
+    if (record.file_url) {
+      const path = record.file_url.split("/research-files/")[1];
 
-    if (record.sections && Array.isArray(record.sections)) {
-      record.sections.forEach(sec => {
-        if (Array.isArray(sec.content)) {
-          sec.content.forEach(item => {
-            if (item.type === "image" && item.value) {
-              const filePath = item.value.split("/research-images/")[1];
-              if (filePath) imagesToDelete.push(filePath);
-            }
-          });
-        }
-      });
-    }
-
-    if (imagesToDelete.length > 0) {
       const { error: storageError } = await supabaseClient
         .storage
-        .from("research-images")
-        .remove(imagesToDelete);
+        .from("research-files")
+        .remove([path]);
 
       if (storageError) {
-  console.error(storageError);
-  alert("Warning: Some images were not deleted from storage.");
-}
+        console.warn("Storage delete failed:", storageError.message);
+      }
     }
 
-    // ---------------- DELETE DATABASE RECORD ----------------
+    // 3. Delete DB row
     const { error } = await supabaseClient
       .from("researches")
       .delete()
@@ -1696,15 +1514,15 @@ window.del = async (id) => {
       return;
     }
 
-    load(); // refresh list
+    load(); // refresh UI
   } catch (err) {
     console.error(err);
     alert("Delete failed");
   }
 };
-	/* ---------- EDIT WITH PASSWORD ---------- */
+	/* ---------- EDIT ---------- */
 	window.editResearch = async (id) => {
-  // find the record in cache
+
   const record = dataCache.find(r => r.id === id);
 
   if (!record) {
@@ -1721,149 +1539,58 @@ window.del = async (id) => {
   document.getElementById("editAbstract").value = record.abstract || "";
   document.getElementById("editKeywords").value = (record.keywords || []).join(", ");
   document.getElementById("editAdvisers").value = toArray(record.advisers).join(", ");
-  document.getElementById("editSDG").value = record.sdg || "";
-	  const container = document.getElementById("editSectionsContainer");
-container.innerHTML = "";
+  document.getElementById("editSDG").value = toSDGArray(record.sdg).join(", ");
 
-if (record.sections && Array.isArray(record.sections)) {
-  record.sections.forEach(sec => {
+  // Show modal
+  const modal = document.getElementById("editModal");
+  modal.style.display = "flex";
 
-    const block = document.createElement("div");
-    block.className = "section-block";
+  // Close modal
+  const closeModal = () => {
+    modal.style.display = "none";
+  };
 
-    block.innerHTML = `
-      <label>Section Title</label>
-      <input type="text" class="section-title" value="${sec.title || ""}">
+  document.getElementById("cancelEdit").onclick = closeModal;
 
-      <div class="section-content"></div>
+  modal.onclick = (e) => {
+    if (e.target === modal) closeModal();
+  };
 
-      <button type="button" onclick="addEditText(this)">+ Text</button>
-      <button type="button" onclick="addEditImage(this)">+ Image</button>
-      <button type="button" onclick="this.parentElement.remove()">Remove Section</button>
-    `;
+  // Submit update
+  const form = document.getElementById("editForm");
 
-    const contentDiv = block.querySelector(".section-content");
+  form.onsubmit = async (e) => {
+    e.preventDefault();
 
-    if (Array.isArray(sec.content)) {
-      sec.content.forEach(item => {
+    const updated = {
+      title: document.getElementById("editTitle").value.trim(),
+      authors: document.getElementById("editAuthors").value
+        .split(",").map(a => a.trim()).filter(Boolean).join("\n"),
+      course: document.getElementById("editCourse").value.trim(),
+      academic_year: document.getElementById("editYear").value.trim(),
+      research_date: document.getElementById("editDate").value.trim(),
+      abstract: document.getElementById("editAbstract").value.trim(),
+      keywords: document.getElementById("editKeywords").value
+        .split(",").map(k => k.trim()).filter(Boolean),
+      advisers: document.getElementById("editAdvisers").value
+        .split(",").map(a => a.trim()).filter(Boolean).join("\n"),
+      sdg: toSDGArray(document.getElementById("editSDG").value)
+    };
 
-        if (item.type === "text") {
-          const textarea = document.createElement("textarea");
-          textarea.className = "section-text";
-          textarea.value = item.value || "";
-          contentDiv.appendChild(textarea);
-        }
+    const { error } = await supabaseClient
+      .from("researches")
+      .update(updated)
+      .eq("id", id);
 
-        if (item.type === "image") {
-          const img = document.createElement("img");
-          img.src = item.value;
-          img.style.maxWidth = "200px";
-          img.style.display = "block";
-          img.style.marginBottom = "5px";
-
-          const input = document.createElement("input");
-          input.type = "file";
-          input.accept = "image/*";
-          input.className = "section-image";
-
-          contentDiv.appendChild(img);
-          contentDiv.appendChild(input);
-        }
-
-      });
+    if (error) {
+      alert(error.message);
+    } else {
+      alert("Research updated successfully!");
+      closeModal();
+      load();
     }
-
-    container.appendChild(block);
-  });
-}
-
-
-	  // Show modal
-	  const modal = document.getElementById("editModal");
-	  modal.style.display = "flex";
-
-	  // Close modal handler
-	  const closeModal = () => { modal.style.display = "none"; };
-	  document.getElementById("cancelEdit").onclick = closeModal;
-	  modal.onclick = e => { if(e.target === modal) closeModal(); } // click outside closes
-
-	  // Submit changes
-	  const form = document.getElementById("editForm");
-	  form.onsubmit = async e => {
-		e.preventDefault();
-		
-		
-		const sectionBlocks = document.querySelectorAll("#editSectionsContainer .section-block");
-let sections = [];
-
-for (const block of sectionBlocks) {
-
-  const title = block.querySelector(".section-title").value;
-
-  const content = [];
-  const elements = block.querySelector(".section-content").children;
-
-  for (const el of elements) {
-
-    if (el.classList.contains("section-text")) {
-      content.push({
-        type: "text",
-        value: el.value
-      });
-    }
-
-    if (el.classList.contains("section-image")) {
-      if (el.files.length > 0) {
-
-        const file = el.files[0];
-
-        if (!file.type.startsWith("image/")) {
-          alert("Only image files allowed.");
-          continue;
-        }
-
-        const url = await uploadImage(file);
-
-        if (url) {
-          content.push({
-            type: "image",
-            value: url
-          });
-        }
-      }
-    }
-
-  }
-
-  sections.push({ title, content });
-}
-		
-		
-		const updated = {
-		  title: document.getElementById("editTitle").value.trim(),
-		  authors: document.getElementById("editAuthors").value.split(",").map(a => a.trim()).filter(Boolean).join("\n"),
-		  course: document.getElementById("editCourse").value.trim(),
-		  academic_year: document.getElementById("editYear").value.trim(),
-		  research_date: document.getElementById("editDate").value.trim(),
-		  abstract: document.getElementById("editAbstract").value.trim(),
-		  keywords: document.getElementById("editKeywords").value.split(",").map(k => k.trim()).filter(Boolean),
-		  advisers: document.getElementById("editAdvisers").value.split(",").map(a => a.trim()).filter(Boolean).join("\n"),
-		  sdg: toSDGArray(document.getElementById("editSDG").value),
-		  sections: sections
-	}; 
-		const { error } = await supabaseClient
-		  .from("researches")
-		  .update(updated)
-		  .eq("id", id);
-
-		if (error) alert(error.message);
-		else {
-		  alert("Research updated successfully!");
-		  closeModal();
-		  load();
-		}
-	  };
-	};
+  };
+};
 	});
 	</script>
 <script src="settings.js"></script>
