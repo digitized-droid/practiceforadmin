@@ -712,6 +712,8 @@ button.active-filter:focus {
     </iframe>
   </div>
 </div>
+
+
 <!-- Edit Modal (hidden by default) -->
 <div id="editModal" class="editmodal">
   <div class="editmodal-body">
@@ -1239,10 +1241,10 @@ button.active-filter:focus {
   const isPDF = url.toLowerCase().includes(".pdf");
 
   if (isPDF) {
-    // clean inline preview
+    // direct PDF inside iframe (works for most mobile + desktop)
     frame.src = url;
   } else {
-    // DOC/DOCX preview via Google Docs Viewer
+    // DOC/DOCX via Google viewer
     frame.src = `https://docs.google.com/gview?url=${encodeURIComponent(url)}&embedded=true`;
   }
 
