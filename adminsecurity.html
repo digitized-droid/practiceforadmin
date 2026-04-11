@@ -744,18 +744,13 @@ async function updateUser(id, field, value) {
 async function deleteUser(id) {
   if (!confirm("Delete user?")) return;
 
-  const res = await fetch("https://vwzhzycagqqhcxbopjtc.functions.supabase.co/delete-user", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({ user_id: id })
-  });
+  const { error } = await supabaseClient
+    .from("profiles")
+    .delete()
+    .eq("id", id);
 
-  const result = await res.json();
-
-  if (!res.ok) {
-    alert(result.error || "Delete failed");
+  if (error) {
+    alert("Delete failed: " + error.message);
     return;
   }
 
